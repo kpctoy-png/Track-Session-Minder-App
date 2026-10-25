@@ -30,6 +30,9 @@ interface ScheduleStore {
   selectEvent: (eventId: string) => void;
   selectDay: (dayId: string) => void;
   updateDay: (dayId: string, items: ScheduleItem[]) => void;
+  /** Resolves to an error message, or null once the event is saved. */
+  createEvent: (event: TrackEvent) => Promise<string | null>;
+  deleteEvent: (eventId: string) => Promise<string | null>;
   sync: { status: SyncStatus; message?: string };
   /** Signed-in admin; always null when there is no database. */
   session: Session | null;
@@ -166,6 +169,42 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
               message: error?.message ?? 'The change was not saved. Try signing in again.',
             });
           });
+      },
+      createEvent: async (newEvent) => {
+        if (events.some((e) => e.id === newEvent.id)) return 'An event at this track on these dates already exists.';
+        if (supabase) {
+          const { error } = await supabase.from('events').insert({
+            id: newEvent.id,
+            name: newEvent.name,
+            track: newEvent.track,
+            location: newEvent.location,
+            sort: events.length,
+          });
+          if (error) return error.message;
+          const { error: daysError } = await supabase
+            .from('event_days')
+            .insert(newEvent.days.map((d) => ({ id: d.id, event_id: newEvent.id, label: d.label, date: d.date, items: d.items })));
+          if (daysError) {
+            await supabase.from('events').delete().eq('id', newEvent.id);
+            return daysError.message;
+          }
+        }
+        setEvents((all) => [...all.filter((e) => e.id !== newEvent.id), newEvent]);
+        setEventId(newEvent.id);
+        setDayId(null);
+        return null;
+      },
+      deleteEvent: async (id) => {
+        if (supabase) {
+          // Days are removed with the event (on delete cascade).
+          const { data, error } = await supabase.from('events').delete().eq('id', id).select('id');
+          if (error) return error.message;
+          if (!data?.length) return 'The event was not deleted. Try signing in again.';
+        }
+        setEvents((all) => all.filter((e) => e.id !== id));
+        setEventId(null);
+        setDayId(null);
+        return null;
       },
       sync,
       session,
