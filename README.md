@@ -8,7 +8,8 @@ Built with [Expo](https://expo.dev) (React Native) and Expo Router.
 
 ## What's here
 
-- `src/app/` – the three screens: **Now**, **Schedule** and **Admin**
+- `src/app/` – the screens: **Events**, **Now**, **Schedule**, **My Day** and **Admin**. The Admin tab only
+  appears for signed-in admins; to sign in, open `/admin` (on the web: https://kpctoy-png.github.io/Track-Session-Minder-App/admin)
 - `src/data/sampleEvents.ts` – the Roebling and Barber schedules, copied from the Just Track It PDFs
 - `src/lib/schedule.ts` – time math: what's on track now, what's next, shifting the day when running late
 - `src/lib/ScheduleStore.tsx` – loads the events and listens for live changes
