@@ -25,12 +25,29 @@ has copy-and-paste SQL for adding clubs and admins. Club logos live in
 
 1. Run `supabase/setup.sql` in the Supabase SQL Editor (again after updates that change it; it only adds what's missing).
    The first run makes the accounts that already exist platform admins.
-2. Turn off public sign-ups (Authentication → Sign In / Providers) and add
-   admins under Authentication → Users.
+2. Add admins under Authentication → Users. Being signed in gives no editing
+   rights by itself: only people listed in `platform_admins` or `club_admins` can edit.
 3. Put the project URL and publishable key in `.env`:
    `EXPO_PUBLIC_SUPABASE_URL=...` and `EXPO_PUBLIC_SUPABASE_KEY=...`
 
 Without `.env`, the app runs on the built-in sample events in practice mode.
+
+### Coaching sessions and driver sign-in
+
+Admins book a paid coaching session for one student by email (Admin tab →
+Coaching). The student signs in on the Me tab with a one-time code emailed to
+them, then sees the session on Me, on Now (with a countdown) and on Schedule.
+Only that student and the club's admins can see it. A session is linked to a
+schedule item, so "running late" shifts move it too.
+
+Driver sign-in needs three settings in Supabase:
+
+1. Authentication → Sign In / Providers: turn on **Allow new users to sign up**.
+2. Authentication → Emails → Templates: in **Magic Link** and **Confirm signup**,
+   add the code to the message, for example `<p>Your code: {{ .Token }}</p>`.
+3. Authentication → Emails → SMTP Settings: set up a custom email sender
+   (for example Resend or SendGrid). Supabase's built-in sender only emails
+   the project's team members and only a few emails an hour.
 
 ## Website version
 
