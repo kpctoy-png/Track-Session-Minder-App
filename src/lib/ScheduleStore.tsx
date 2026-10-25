@@ -37,6 +37,8 @@ interface ScheduleStore {
   createEvent: (event: TrackEvent) => Promise<string | null>;
   deleteEvent: (eventId: string) => Promise<string | null>;
   sync: { status: SyncStatus; message?: string };
+  /** False when the database has no events yet; event and day are then empty placeholders. */
+  hasEvents: boolean;
   /** Signed-in admin; always null when there is no database. */
   session: Session | null;
   /** Clubs whose events the signed-in admin may change. */
@@ -93,6 +95,9 @@ async function fetchEvents(): Promise<TrackEvent[]> {
     }))
     .filter((e) => e.days.length > 0);
 }
+
+// Stands in when there are no events, so the tabs (and Admin's New event button) still work.
+const NO_EVENT: TrackEvent = { id: '', clubId: '', name: 'No events yet', track: '', location: '', days: [{ id: '', label: '', date: '', items: [] }] };
 
 function replaceDay(events: TrackEvent[], day: EventDay): TrackEvent[] {
   return events.map((e) => ({ ...e, days: e.days.map((d) => (d.id === day.id ? day : d)) }));
@@ -176,7 +181,8 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   const canManage = (clubId: string) => rights.all || rights.clubIds.includes(clubId);
 
   const todays = events.length ? findToday(events, now) : null;
-  const event = events.find((e) => e.id === eventId) ?? todays?.event ?? events[0];
+  const loaded = sync.status === 'live' || sync.status === 'offline';
+  const event = events.find((e) => e.id === eventId) ?? todays?.event ?? events[0] ?? (loaded ? NO_EVENT : undefined);
   const day = event?.days.find((d) => d.id === dayId) ?? (todays?.event.id === event?.id ? todays?.day : undefined) ?? event?.days[0];
   const isLive = !!day && todays?.day.id === day.id;
 
@@ -251,6 +257,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         return null;
       },
       sync,
+      hasEvents: events.length > 0,
       session,
       manageableClubs: clubs.filter((c) => canManage(c.id)),
       canManage,
