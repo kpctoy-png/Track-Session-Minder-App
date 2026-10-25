@@ -141,6 +141,10 @@ $$;
 -- Optional: the coach gets their own booking email and sees the session after signing in.
 alter table coaching_sessions add column if not exists coach_email text;
 
+-- A booking is a paid coaching session or a check ride; both work the same way.
+alter table coaching_sessions add column if not exists kind text not null default 'coaching'
+  check (kind in ('coaching', 'checkride'));
+
 alter table coaching_sessions enable row level security;
 
 -- Students and coaches see only their own sessions; club admins see and manage their club's.
@@ -155,8 +159,9 @@ drop policy if exists "Club admins manage coaching" on coaching_sessions;
 create policy "Club admins manage coaching" on coaching_sessions for all to authenticated
   using (can_manage_club(club_of_day(day_id))) with check (can_manage_club(club_of_day(day_id)));
 
--- A coach can't be booked into two overlapping sessions on the same day. The
--- coach is matched by email, or by name when no email was entered.
+-- Neither the student nor the coach can be in two overlapping bookings (coaching
+-- or check ride) on the same day. The coach is matched by email, or by name when
+-- no email was entered.
 create or replace function prevent_coach_double_booking() returns trigger
   language plpgsql security definer set search_path = public as $$
 declare
@@ -167,13 +172,21 @@ begin
     and c.id <> new.id
     and c.start_time < new.end_time and new.start_time < c.end_time
     and (
-      (new.coach_email is not null and lower(c.coach_email) = lower(new.coach_email))
+      c.student_email = new.student_email
+      or (new.coach_email is not null and lower(c.coach_email) = lower(new.coach_email))
       or (trim(new.coach) <> '' and lower(trim(c.coach)) = lower(trim(new.coach)))
     )
   limit 1;
-  if found then
-    raise exception '% is already coaching % from % to % that day.',
-      coalesce(nullif(trim(new.coach), ''), new.coach_email), clash.student_email, clash.start_time, clash.end_time
+  if found and clash.student_email = new.student_email then
+    raise exception '% already has a % from % to % that day.',
+      new.student_email, case clash.kind when 'checkride' then 'check ride' else 'coaching session' end,
+      clash.start_time, clash.end_time
+      using errcode = 'P0001';
+  elsif found then
+    raise exception '% already has a % with % from % to % that day.',
+      coalesce(nullif(trim(new.coach), ''), new.coach_email),
+      case clash.kind when 'checkride' then 'check ride' else 'coaching session' end,
+      clash.student_email, clash.start_time, clash.end_time
       using errcode = 'P0001';
   end if;
   return new;

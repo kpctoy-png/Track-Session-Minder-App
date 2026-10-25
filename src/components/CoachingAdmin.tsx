@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { coachingTimes, findCoachClash, isEmail } from '@/lib/coaching';
+import type { BookingKind } from '@/data/types';
+import { bookingName, coachingTimes, findClash, isEmail } from '@/lib/coaching';
 import { formatRange, formatTime, sortItems } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { colors } from './theme';
 
-/** Admin list of the selected day's coaching sessions, with a form to book one for a student. */
+/** Admin list of the selected day's coaching sessions and check rides, with a form to book one for a student. */
 export function CoachingAdmin() {
   const { day, coaching, addCoaching, removeCoaching } = useSchedule();
   const [adding, setAdding] = useState(false);
+  const [kind, setKind] = useState<BookingKind>('coaching');
   const [email, setEmail] = useState('');
   const [coach, setCoach] = useState('');
   const [coachEmail, setCoachEmail] = useState('');
@@ -27,10 +29,11 @@ export function CoachingAdmin() {
   const save = async () => {
     const item = items.find((i) => i.id === itemId);
     if (!isEmail(email)) return setError("Enter the student's email. They sign in with it to see the session.");
-    if (coachEmail.trim() && !isEmail(coachEmail)) return setError("Check the coach's email, or leave it empty.");
-    if (!item) return setError('Pick the session the coaching happens in.');
+    if (coachEmail.trim() && !isEmail(coachEmail)) return setError("Check the instructor's email, or leave it empty.");
+    if (!item) return setError(`Pick the session the ${kind === 'checkride' ? 'check ride' : 'coaching'} happens in.`);
     const draft = {
       dayId: day.id,
+      kind,
       itemId: item.id,
       studentEmail: email,
       coach: coach.trim(),
@@ -39,11 +42,16 @@ export function CoachingAdmin() {
       end: item.end,
       notes: notes.trim() || undefined,
     };
-    const clash = findCoachClash(coaching, draft, day);
-    if (clash)
+    const clash = findClash(coaching, draft, day);
+    if (clash) {
+      const what = bookingName(clash.session.kind).toLowerCase();
+      const when = formatRange(coachingTimes(clash.session, day));
       return setError(
-        `${draft.coach || draft.coachEmail} is already coaching ${clash.studentEmail} at ${formatRange(coachingTimes(clash, day))}. Pick another session or coach.`,
+        clash.who === 'student'
+          ? `${clash.session.studentEmail} already has a ${what} at ${when}. Pick another session.`
+          : `${draft.coach || draft.coachEmail} already has a ${what} with ${clash.session.studentEmail} at ${when}. Pick another session or instructor.`,
       );
+    }
     setBusy(true);
     const problem = await addCoaching(draft);
     setBusy(false);
@@ -57,9 +65,10 @@ export function CoachingAdmin() {
 
   return (
     <View>
-      <Text style={styles.heading}>Coaching</Text>
+      <Text style={styles.heading}>Coaching and check rides</Text>
       <Text style={styles.sub}>
-        Book a paid coaching session for one student. They get an email, and see it in the app after signing in on the Me tab.
+        Book a paid coaching session or a check ride for one student. The student and instructor each get an email, and see
+        it in the app after signing in on the Me tab. Nobody can be booked twice at the same time.
       </Text>
       {booked.map(({ session, start, end }) => (
         <View key={session.id} style={styles.row}>
@@ -67,14 +76,14 @@ export function CoachingAdmin() {
             <Text style={styles.rowTime}>{formatRange({ start, end })}</Text>
             <Text style={styles.rowTitle}>{session.studentEmail}</Text>
             <Text style={styles.rowSub}>
-              {session.coach ? `Coach: ${session.coach}` : 'No coach named'}
+              {bookingName(session.kind)} · {session.coach ? `Instructor: ${session.coach}` : 'No instructor named'}
               {session.notes ? ` · ${session.notes}` : ''}
             </Text>
           </View>
           <Pressable
             onPress={async () => setError(await removeCoaching(session.id))}
             style={styles.remove}
-            accessibilityLabel={`Remove coaching for ${session.studentEmail}`}
+            accessibilityLabel={`Remove ${bookingName(session.kind).toLowerCase()} for ${session.studentEmail}`}
           >
             <Text style={styles.removeText}>Remove</Text>
           </Pressable>
@@ -83,6 +92,13 @@ export function CoachingAdmin() {
 
       {adding ? (
         <View style={styles.form}>
+          <View style={styles.chips}>
+            {(['coaching', 'checkride'] as const).map((k) => (
+              <Pressable key={k} onPress={() => setKind(k)} style={[styles.chip, kind === k && styles.chipOn]}>
+                <Text style={[styles.chipText, kind === k && styles.chipTextOn]}>{k === 'checkride' ? 'Check ride' : 'Coaching'}</Text>
+              </Pressable>
+            ))}
+          </View>
           <TextInput
             id="coach-student"
             style={styles.input}
@@ -96,7 +112,7 @@ export function CoachingAdmin() {
           <TextInput
             id="coach-name"
             style={styles.input}
-            placeholder="Coach's name"
+            placeholder="Instructor's name"
             placeholderTextColor={colors.muted}
             value={coach}
             onChangeText={setCoach}
@@ -104,7 +120,7 @@ export function CoachingAdmin() {
           <TextInput
             id="coach-email"
             style={styles.input}
-            placeholder="Coach's email (optional, they get a copy)"
+            placeholder="Instructor's email (optional, they get their own email)"
             placeholderTextColor={colors.muted}
             autoCapitalize="none"
             keyboardType="email-address"
@@ -132,7 +148,7 @@ export function CoachingAdmin() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <View style={styles.actions}>
             <Pressable onPress={save} style={[styles.btn, styles.btnPrimary]} disabled={busy}>
-              <Text style={[styles.btnText, styles.btnTextPrimary]}>{busy ? 'Saving…' : 'Book coaching'}</Text>
+              <Text style={[styles.btnText, styles.btnTextPrimary]}>{busy ? 'Saving…' : kind === 'checkride' ? 'Book check ride' : 'Book coaching'}</Text>
             </Pressable>
             <Pressable onPress={() => setAdding(false)} style={styles.btn}>
               <Text style={styles.btnText}>Cancel</Text>
@@ -143,7 +159,7 @@ export function CoachingAdmin() {
         <>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable onPress={() => setAdding(true)} style={[styles.btn, styles.btnPrimary, styles.addBtn]}>
-            <Text style={[styles.btnText, styles.btnTextPrimary]}>+ Book coaching</Text>
+            <Text style={[styles.btnText, styles.btnTextPrimary]}>+ Book coaching or check ride</Text>
           </Pressable>
         </>
       )}

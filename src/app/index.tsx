@@ -5,7 +5,7 @@ import { LoadingOrError } from '@/components/LoadingOrError';
 import { PreviewClock } from '@/components/PreviewClock';
 import { colors, itemColors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
-import { coachingTimes, coachingTitle, sessionsFor } from '@/lib/coaching';
+import { bookingName, coachingTimes, coachingTitle, sessionsFor } from '@/lib/coaching';
 import { shortDate, todayISO } from '@/lib/dates';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { countdown, formatRange, formatTime, fromMinutes, getNowState, toMinutes } from '@/lib/schedule';
@@ -42,7 +42,7 @@ export default function NowScreen() {
 
       {myCoaching ? (
         <Card
-          label="Your coaching session"
+          label={`Your ${bookingName(myCoaching.session.kind).toLowerCase()}`}
           title={coachingTitle(myCoaching.session, myEmail)}
           time={formatRange(myCoaching)}
           subtitle={
@@ -63,7 +63,7 @@ export default function NowScreen() {
           }}
         >
           <Card
-            label="Your next coaching session"
+            label={`Your next ${bookingName(nextElsewhere.session.kind).toLowerCase()}`}
             title={coachingTitle(nextElsewhere.session, myEmail)}
             time={`${nextElsewhere.event.name} · ${nextElsewhere.day.label} ${shortDate(nextElsewhere.day.date)} · ${formatTime(nextElsewhere.start)}`}
             subtitle="Tap to see that day"

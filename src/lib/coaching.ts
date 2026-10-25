@@ -1,4 +1,7 @@
-import type { CoachingSession, EventDay } from '@/data/types';
+import type { BookingKind, CoachingSession, EventDay } from '@/data/types';
+
+/** "Coaching session" or "Check ride". */
+export const bookingName = (kind: BookingKind | undefined) => (kind === 'checkride' ? 'Check ride' : 'Coaching session');
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -19,10 +22,11 @@ export function sessionsFor(coaching: CoachingSession[], email: string | null): 
 export const isCoachOf = (session: CoachingSession, email: string | null) =>
   !!email && session.studentEmail !== email && session.coachEmail?.toLowerCase() === email;
 
-/** "With Dave" for the student, "Coaching sam@example.com" for the coach. */
+/** "With Dave" for the student, "Coaching sam@example.com" or "Check ride for sam@example.com" for the coach. */
 export function coachingTitle(session: CoachingSession, email: string | null): string {
-  if (isCoachOf(session, email)) return `Coaching ${session.studentEmail}`;
-  return session.coach ? `With ${session.coach}` : 'Coaching session';
+  if (isCoachOf(session, email))
+    return session.kind === 'checkride' ? `Check ride for ${session.studentEmail}` : `Coaching ${session.studentEmail}`;
+  return session.coach ? `With ${session.coach}` : bookingName(session.kind);
 }
 
 /** The same coach, matched by email, or by name when no email was entered. */
@@ -32,15 +36,21 @@ function sameCoach(a: Pick<CoachingSession, 'coach' | 'coachEmail'>, b: Pick<Coa
   return !!name && name === b.coach.trim().toLowerCase();
 }
 
-/** An existing session on the same day that the coach of `draft` is already giving at an overlapping time. */
-export function findCoachClash(
+/**
+ * An existing coaching session or check ride on the same day, at an overlapping time, that the student or the
+ * coach of `draft` is already booked for. Nobody can be in two places at once, whichever kind each booking is.
+ */
+export function findClash(
   sessions: CoachingSession[],
   draft: Omit<CoachingSession, 'id'>,
   day: EventDay,
-): CoachingSession | undefined {
-  return sessions.find((c) => {
-    if (c.dayId !== draft.dayId || !sameCoach(c, draft)) return false;
+): { session: CoachingSession; who: 'student' | 'coach' } | undefined {
+  for (const c of sessions) {
+    if (c.dayId !== draft.dayId) continue;
     const t = coachingTimes(c, day);
-    return t.start < draft.end && draft.start < t.end;
-  });
+    if (!(t.start < draft.end && draft.start < t.end)) continue;
+    if (c.studentEmail === normalizeEmail(draft.studentEmail)) return { session: c, who: 'student' };
+    if (sameCoach(c, draft)) return { session: c, who: 'coach' };
+  }
+  return undefined;
 }

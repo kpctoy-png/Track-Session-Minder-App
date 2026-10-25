@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { FeedbackForm } from '@/components/FeedbackForm';
 import { colors } from '@/components/theme';
-import { coachingTimes, coachingTitle, isCoachOf, isEmail, sessionsFor } from '@/lib/coaching';
+import { bookingName, coachingTimes, coachingTitle, isCoachOf, isEmail, sessionsFor } from '@/lib/coaching';
 import { shortDate } from '@/lib/dates';
 import { formatRange } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
@@ -53,7 +53,7 @@ export default function MeScreen() {
       </View>
       {feedbackButton}
 
-      <Text style={styles.heading}>Your coaching sessions</Text>
+      <Text style={styles.heading}>Your coaching and check rides</Text>
       {mine.length ? (
         mine.map(({ session, event, day, start, end }) => (
           <Pressable
@@ -69,7 +69,11 @@ export default function MeScreen() {
               {event.name.toUpperCase()} · {day.label.toUpperCase()} {shortDate(day.date).toUpperCase()}
             </Text>
             <Text style={styles.cardTitle}>
-              {isCoachOf(session, myEmail) ? coachingTitle(session, myEmail) : session.coach ? `Coaching with ${session.coach}` : 'Coaching session'}
+              {isCoachOf(session, myEmail)
+                ? coachingTitle(session, myEmail)
+                : session.coach
+                ? `${session.kind === 'checkride' ? 'Check ride' : 'Coaching'} with ${session.coach}`
+                : bookingName(session.kind)}
             </Text>
             <Text style={styles.cardTime}>{formatRange({ start, end })}</Text>
             {session.notes ? <Text style={styles.cardNotes}>{session.notes}</Text> : null}
@@ -77,7 +81,7 @@ export default function MeScreen() {
         ))
       ) : (
         <Text style={styles.sub}>
-          No coaching sessions yet. When an organizer books one for {myEmail}, as student or coach, it shows up here and on the Now tab.
+          Nothing booked yet. When an organizer books coaching or a check ride for {myEmail}, as student or coach, it shows up here and on the Now tab.
         </Text>
       )}
     </ScrollView>
@@ -115,7 +119,7 @@ function EmailCodeSignIn() {
   return (
     <View>
       <Text style={styles.heading}>Sign in</Text>
-      <Text style={styles.sub}>See the coaching sessions booked for you. We'll email you a code, no password needed.</Text>
+      <Text style={styles.sub}>See the coaching sessions and check rides booked for you. We'll email you a code, no password needed.</Text>
       {sentTo ? (
         <>
           <Text style={styles.sub}>We sent a code to {sentTo}.</Text>
