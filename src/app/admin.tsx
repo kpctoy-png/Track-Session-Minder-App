@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useNavigation } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CoachingAdmin } from '@/components/CoachingAdmin';
@@ -19,10 +20,21 @@ export default function AdminScreen() {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const navigation = useNavigation();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const items = sortItems(day.items);
   const editable = hasEvents && canManage(event.clubId);
   const clubName = clubs.find((c) => c.id === event.clubId)?.name ?? 'This club';
+
+  // Tapping the Admin tab again always brings back the dashboard.
+  useEffect(
+    () =>
+      navigation.addListener('tabPress' as never, () => {
+        setCreating(false);
+        setImporting(false);
+      }),
+    [navigation],
+  );
 
   if (supabase && !session) return <SignIn />;
   if (creating) return <NewEventForm onDone={() => setCreating(false)} />;

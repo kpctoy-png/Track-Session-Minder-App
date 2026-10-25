@@ -112,6 +112,9 @@ export function NewEventForm({ onDone }: { onDone: () => void }) {
       <Pressable onPress={save} style={styles.save} disabled={saving}>
         <Text style={styles.saveText}>{saving ? 'Saving…' : 'Create event'}</Text>
       </Pressable>
+      <Pressable onPress={onDone} style={styles.back}>
+        <Text style={styles.cancel}>Cancel and go back to Admin</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -164,4 +167,5 @@ const styles = StyleSheet.create({
   error: { color: '#FF6961', fontSize: 14, marginTop: 12 },
   save: { backgroundColor: colors.accent, borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 20 },
   saveText: { color: '#000', fontSize: 16, fontWeight: '700' },
+  back: { alignItems: 'center', padding: 14, marginTop: 8 },
 });

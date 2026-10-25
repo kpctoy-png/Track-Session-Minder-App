@@ -107,6 +107,9 @@ export function SheetImportForm({ onDone }: { onDone: () => void }) {
           </Pressable>
         </>
       ) : null}
+      <Pressable onPress={onDone} style={styles.back}>
+        <Text style={styles.cancel}>Cancel and go back to Admin</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -135,4 +138,5 @@ const styles = StyleSheet.create({
   previewLine: { color: colors.muted, fontSize: 13, fontVariant: ['tabular-nums'] },
   save: { backgroundColor: colors.accent, borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 20 },
   saveText: { color: '#000', fontSize: 16, fontWeight: '700' },
+  back: { alignItems: 'center', padding: 14, marginTop: 8 },
 });
