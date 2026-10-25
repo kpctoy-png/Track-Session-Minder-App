@@ -1,5 +1,7 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Link } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { shortDate } from '@/lib/dates';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { colors } from './theme';
 
@@ -12,19 +14,25 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
 }
 
 export function EventPicker() {
-  const { events, event, day, selectEvent, selectDay } = useSchedule();
+  const { event, day, selectDay } = useSchedule();
   return (
     <View style={styles.wrap}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {events.map((e) => (
-          <Chip key={e.id} label={e.name} selected={e.id === event.id} onPress={() => selectEvent(e.id)} />
-        ))}
-      </ScrollView>
+      <Link href="/events" asChild>
+        <Pressable style={styles.event}>
+          <View style={styles.eventText}>
+            <Text style={styles.eventName}>{event.name}</Text>
+            <Text style={styles.eventTrack}>
+              {event.track} · {event.location}
+            </Text>
+          </View>
+          <Text style={styles.change}>Change</Text>
+        </Pressable>
+      </Link>
       <View style={styles.row}>
         {event.days.map((d) => (
           <Chip
             key={d.id}
-            label={`${d.label} ${Number(d.date.slice(5, 7))}/${Number(d.date.slice(8))}`}
+            label={`${d.label} · ${shortDate(d.date)}`}
             selected={d.id === day.id}
             onPress={() => selectDay(d.id)}
           />
@@ -35,8 +43,13 @@ export function EventPicker() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 8, marginBottom: 12 },
-  row: { flexDirection: 'row', gap: 8 },
+  wrap: { gap: 10, marginBottom: 12 },
+  event: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  eventText: { flex: 1 },
+  eventName: { color: colors.text, fontSize: 20, fontWeight: '700' },
+  eventTrack: { color: colors.muted, fontSize: 13, marginTop: 2 },
+  change: { color: colors.accent, fontSize: 15, fontWeight: '600' },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,

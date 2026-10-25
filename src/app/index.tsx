@@ -8,16 +8,13 @@ import { useSchedule } from '@/lib/ScheduleStore';
 import { countdown, formatRange, formatTime, fromMinutes, getNowState } from '@/lib/schedule';
 
 export default function NowScreen() {
-  const { event, day, clock } = useSchedule();
+  const { day, clock } = useSchedule();
   const state = getNowState(day, clock.minuteOfDay);
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <EventPicker />
       <PreviewClock />
-      <Text style={styles.track}>
-        {event.track} · {event.location}
-      </Text>
       {!clock.isPreview ? <Text style={styles.clock}>{formatTime(fromMinutes(clock.minuteOfDay))}</Text> : null}
 
       {state.dayOver ? (
@@ -77,7 +74,6 @@ function Card({ label, item, title, subtitle, big }: CardProps) {
 
 const styles = StyleSheet.create({
   page: { padding: 16, paddingBottom: 40 },
-  track: { color: colors.muted, fontSize: 14, marginBottom: 4 },
   clock: { color: colors.text, fontSize: 40, fontWeight: '800', fontVariant: ['tabular-nums'], marginBottom: 8 },
   card: {
     flexDirection: 'row',
