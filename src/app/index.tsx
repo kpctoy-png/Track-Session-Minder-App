@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EventPicker } from '@/components/EventPicker';
 import { LoadingOrError } from '@/components/LoadingOrError';
@@ -6,19 +6,33 @@ import { PreviewClock } from '@/components/PreviewClock';
 import { colors, itemColors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
 import { coachingTimes } from '@/lib/coaching';
+import { shortDate, todayISO } from '@/lib/dates';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { countdown, formatRange, formatTime, fromMinutes, getNowState, toMinutes } from '@/lib/schedule';
 
 export default function NowScreen() {
-  const { day, clock, hasEvents, coaching, myEmail } = useSchedule();
+  const { events, day, clock, hasEvents, coaching, myEmail, selectEvent, selectDay } = useSchedule();
   if (!hasEvents) return <LoadingOrError status="live" />;
   const state = getNowState(day, clock.minuteOfDay);
-  // The student's next coaching session today that hasn't finished yet.
-  const myCoaching = coaching
-    .filter((c) => c.dayId === day.id && c.studentEmail === myEmail)
+  const mine = coaching.filter((c) => c.studentEmail === myEmail);
+  // The student's coaching on the day shown. On the day itself, finished sessions drop off; in a preview,
+  // every session that day stays, since the preview clock is only a stand-in.
+  const myCoaching = mine
+    .filter((c) => c.dayId === day.id)
     .map((c) => ({ session: c, ...coachingTimes(c, day) }))
-    .filter((c) => toMinutes(c.end) > clock.minuteOfDay)
+    .filter((c) => clock.isPreview || toMinutes(c.end) > clock.minuteOfDay)
     .sort((a, b) => a.start.localeCompare(b.start))[0];
+  // Otherwise point to their next coaching on another day, so it isn't hidden behind the day picker.
+  const today = todayISO();
+  const nextElsewhere = myCoaching
+    ? undefined
+    : mine
+        .flatMap((c) => {
+          const event = events.find((e) => e.days.some((d) => d.id === c.dayId));
+          const other = event?.days.find((d) => d.id === c.dayId);
+          return event && other && other.date >= today ? [{ session: c, event, day: other, ...coachingTimes(c, other) }] : [];
+        })
+        .sort((a, b) => (a.day.date + a.start).localeCompare(b.day.date + b.start))[0];
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -32,13 +46,30 @@ export default function NowScreen() {
           title={myCoaching.session.coach ? `With ${myCoaching.session.coach}` : 'Coaching session'}
           time={formatRange(myCoaching)}
           subtitle={
-            toMinutes(myCoaching.start) <= clock.minuteOfDay
+            toMinutes(myCoaching.end) <= clock.minuteOfDay
+              ? `Booked for ${day.label}, ${shortDate(day.date)}`
+              : toMinutes(myCoaching.start) <= clock.minuteOfDay
               ? `Happening now · ends in ${countdown(clock.minuteOfDay, myCoaching.end, clock.seconds)}`
               : `Starts in ${countdown(clock.minuteOfDay, myCoaching.start, clock.seconds)}`
           }
           notes={myCoaching.session.notes}
           highlight
         />
+      ) : nextElsewhere ? (
+        <Pressable
+          onPress={() => {
+            selectEvent(nextElsewhere.event.id);
+            selectDay(nextElsewhere.day.id);
+          }}
+        >
+          <Card
+            label="Your next coaching session"
+            title={nextElsewhere.session.coach ? `With ${nextElsewhere.session.coach}` : 'Coaching session'}
+            time={`${nextElsewhere.event.name} · ${nextElsewhere.day.label} ${shortDate(nextElsewhere.day.date)} · ${formatTime(nextElsewhere.start)}`}
+            subtitle="Tap to see that day"
+            highlight
+          />
+        </Pressable>
       ) : null}
 
       {state.dayOver ? (
