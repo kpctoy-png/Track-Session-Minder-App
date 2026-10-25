@@ -1,5 +1,5 @@
-// Emails the student (and, separately, the coach if given) when a coaching session is
-// booked, changed or removed. A trigger on coaching_sessions (supabase/schema.sql)
+// Emails the student (and, separately, the coach if given) when a coaching session or
+// check ride is booked, changed or removed. A trigger on coaching_sessions (supabase/schema.sql)
 // calls this function; see README "Coaching emails" for the setup.
 //
 // Secrets (Edge Functions -> Secrets): SMTP_USER (the Google address) and
@@ -15,6 +15,7 @@ interface Coaching {
   id: string;
   day_id: string;
   item_id: string | null;
+  kind?: 'coaching' | 'checkride';
   student_email: string;
   coach: string;
   coach_email: string | null;
@@ -93,30 +94,37 @@ Deno.serve(async (req) => {
   const notes = c.notes ? [`Note: ${escape(c.notes)}`] : [];
   const signIn = (email: string) =>
     `Sign in on the app's <b>Me</b> tab with ${escape(email)} to see it on your schedule, with a countdown. If the day runs late, the app shows the new time.`;
-  const heading = type === 'UPDATE' ? 'Coaching updated' : 'Coaching booked';
+  const checkRide = c.kind === 'checkride';
+  const noun = checkRide ? 'check ride' : 'coaching session';
+  const Title = checkRide ? 'Check ride' : 'Coaching';
+  const heading = `${Title} ${type === 'UPDATE' ? 'updated' : 'booked'}`;
   const subject = `${heading}: ${d.event}, ${d.date} at ${d.time.split(' – ')[0]}`;
 
   // The student and the coach each get their own email, so neither sees the other's address
   // and each is told to sign in with their own.
   if (type === 'DELETE') {
-    await send([c.student_email], `Coaching cancelled: ${d.event}, ${d.date}`, [
-      `Your coaching session with ${coach} on ${escape(d.date)}, ${d.time}, at ${where} has been cancelled.`,
+    await send([c.student_email], `${Title} cancelled: ${d.event}, ${d.date}`, [
+      `Your ${noun} with ${coach} on ${escape(d.date)}, ${d.time}, at ${where} has been cancelled.`,
       'Questions? Reply to this email.',
     ]);
     if (c.coach_email)
-      await send([c.coach_email], `Coaching cancelled: ${d.event}, ${d.date}`, [
-        `Your coaching session with ${student} on ${escape(d.date)}, ${d.time}, at ${where} has been cancelled.`,
+      await send([c.coach_email], `${Title} cancelled: ${d.event}, ${d.date}`, [
+        `Your ${noun} with ${student} on ${escape(d.date)}, ${d.time}, at ${where} has been cancelled.`,
       ]);
   } else {
     await send([c.student_email], subject, [
-      type === 'UPDATE' ? 'Your coaching session has changed.' : 'You have a coaching session booked.',
+      type === 'UPDATE' ? `Your ${noun} has changed.` : `You have a ${noun} booked.`,
       `${when} with ${coach}<br>${where}`,
       ...notes,
       signIn(c.student_email),
     ]);
     if (c.coach_email)
       await send([c.coach_email], subject, [
-        type === 'UPDATE' ? 'A coaching session you are giving has changed.' : 'You have been booked to coach a student.',
+        type === 'UPDATE'
+          ? `A ${noun} you are giving has changed.`
+          : checkRide
+          ? 'You have been booked to give a check ride.'
+          : 'You have been booked to coach a student.',
         `${when} with ${student}<br>${where}`,
         ...notes,
         signIn(c.coach_email),

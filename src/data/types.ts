@@ -43,8 +43,13 @@ export interface TrackEvent {
 }
 
 /** A paid coaching session for one student, usually during one of their run group's sessions. */
+/** A paid coaching session, or a check ride (an instructor's sign-off drive). */
+export type BookingKind = 'coaching' | 'checkride';
+
 export interface CoachingSession {
   id: string;
+  /** Missing means coaching. */
+  kind?: BookingKind;
   dayId: string;
   /** The schedule item it rides along with, so it follows "running late" shifts. */
   itemId?: string;

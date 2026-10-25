@@ -13,11 +13,20 @@ export default function ScheduleScreen() {
   const { day, clock, hasEvents, coaching, myEmail } = useSchedule();
   if (!hasEvents) return <LoadingOrError status="live" />;
   const now = clock.minuteOfDay;
-  // Item id -> badge, for sessions this person takes ("YOUR COACHING") or gives ("YOU'RE COACHING").
+  // Item id -> badge, for bookings this person takes ("YOUR COACHING") or gives ("YOU'RE COACHING").
   const badges = new Map(
     sessionsFor(coaching, myEmail)
       .filter((c) => c.dayId === day.id)
-      .map((c) => [c.itemId, isCoachOf(c, myEmail) ? "YOU'RE COACHING" : 'YOUR COACHING']),
+      .map((c) => [
+        c.itemId,
+        c.kind === 'checkride'
+          ? isCoachOf(c, myEmail)
+            ? 'GIVING CHECK RIDE'
+            : 'YOUR CHECK RIDE'
+          : isCoachOf(c, myEmail)
+          ? "YOU'RE COACHING"
+          : 'YOUR COACHING',
+      ]),
   );
 
   return (

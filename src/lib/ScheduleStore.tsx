@@ -8,7 +8,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { SAMPLE_CLUBS, SAMPLE_EVENTS } from '@/data/sampleEvents';
-import type { Club, CoachingSession, EventDay, Feedback, ScheduleItem, TrackEvent } from '@/data/types';
+import type { BookingKind, Club, CoachingSession, EventDay, Feedback, ScheduleItem, TrackEvent } from '@/data/types';
 import { normalizeEmail } from './coaching';
 import { todayISO } from './dates';
 import { sortItems } from './schedule';
@@ -116,6 +116,7 @@ interface CoachingRow {
   id: string;
   day_id: string;
   item_id: string | null;
+  kind?: BookingKind;
   student_email: string;
   coach: string;
   coach_email: string | null;
@@ -128,6 +129,7 @@ function toCoaching(row: CoachingRow): CoachingSession {
   return {
     id: row.id,
     dayId: row.day_id,
+    kind: row.kind ?? 'coaching',
     itemId: row.item_id ?? undefined,
     studentEmail: row.student_email,
     coach: row.coach,
@@ -344,8 +346,9 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
             item_id: next.itemId ?? null,
             student_email: next.studentEmail,
             coach: next.coach,
-            // Sent only when filled in, so booking still works on a database that predates the column.
+            // Sent only when needed, so booking still works on a database that predates these columns.
             ...(next.coachEmail ? { coach_email: normalizeEmail(next.coachEmail) } : {}),
+            ...(next.kind === 'checkride' ? { kind: 'checkride' } : {}),
             start_time: next.start,
             end_time: next.end,
             notes: next.notes ?? null,
