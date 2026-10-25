@@ -1,10 +1,10 @@
 import type { RunGroupId } from './types';
 
 export const RUN_GROUPS: Record<RunGroupId, { name: string; short: string; color: string }> = {
-  novice: { name: 'Novice / Novice Solo', short: 'Novice', color: '#34C759' },
-  int1: { name: 'Intermediate 1', short: 'Int 1', color: '#0A84FF' },
-  int2: { name: 'Intermediate 2', short: 'Int 2', color: '#BF5AF2' },
-  advanced: { name: 'Advanced', short: 'Adv', color: '#FF453A' },
+  novice: { name: 'Novice / Novice Solo', short: 'Novice', color: '#A8E6A3' },
+  int1: { name: 'Intermediate 1', short: 'Int 1', color: '#A7C7FA' },
+  int2: { name: 'Intermediate 2', short: 'Int 2', color: '#FFF1A0' },
+  advanced: { name: 'Advanced', short: 'Adv', color: '#FF9B9B' },
   ladies: { name: 'Ladies Only', short: 'Ladies', color: '#FF6FB5' },
 };
 
