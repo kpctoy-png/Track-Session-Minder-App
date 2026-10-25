@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { EventPicker } from '@/components/EventPicker';
 import { ItemRow } from '@/components/ItemRow';
+import { NewEventForm } from '@/components/NewEventForm';
 import { PreviewClock } from '@/components/PreviewClock';
 import { colors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
@@ -11,11 +12,15 @@ import { formatTime, fromMinutes, shiftSchedule, sortItems, toMinutes } from '@/
 import { supabase } from '@/lib/supabase';
 
 export default function AdminScreen() {
-  const { day, clock, updateDay, session, sync } = useSchedule();
+  const { event, day, clock, updateDay, deleteEvent, session, sync } = useSchedule();
   const [editing, setEditing] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const items = sortItems(day.items);
 
   if (supabase && !session) return <SignIn />;
+  if (creating) return <NewEventForm onDone={() => setCreating(false)} />;
 
   const runLate = (minutes: number) => updateDay(day.id, shiftSchedule(items, clock.minuteOfDay, minutes));
 
@@ -56,6 +61,26 @@ export default function AdminScreen() {
           <Text style={styles.errorText}>{sync.message}</Text>
         </View>
       ) : null}
+      <View style={styles.eventActions}>
+        <Btn label="+ New event" onPress={() => setCreating(true)} primary />
+        {confirmDelete ? (
+          <>
+            <Btn
+              label={`Delete ${event.name}`}
+              danger
+              onPress={async () => {
+                const problem = await deleteEvent(event.id);
+                setConfirmDelete(false);
+                setDeleteError(problem);
+              }}
+            />
+            <Btn label="Keep it" onPress={() => setConfirmDelete(false)} />
+          </>
+        ) : (
+          <Btn label="Delete event" onPress={() => setConfirmDelete(true)} />
+        )}
+      </View>
+      {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
       <EventPicker />
       <PreviewClock />
 
@@ -161,6 +186,7 @@ const styles = StyleSheet.create({
   heading: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 8 },
   sub: { color: colors.muted, fontSize: 13, marginTop: 2, marginBottom: 10 },
   sessionsHeading: { marginTop: 24 },
+  eventActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   signedIn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#10261A', borderRadius: 12, padding: 12, marginBottom: 12 },
   signedInText: { color: '#34C759', fontSize: 13, flex: 1 },
   error: { backgroundColor: '#2A1212', borderRadius: 12, padding: 12, marginBottom: 12 },
