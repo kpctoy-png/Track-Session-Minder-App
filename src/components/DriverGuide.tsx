@@ -28,7 +28,7 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
       <Section title="Pick your event">
         <Body>
           The event's name is at the top of every screen. Tap Change, or open the Events tab, and tap your weekend. On
-          multi-day events, tap the day chips to switch days.
+          multi-day events, tap the day at the top (for example Friday or Saturday) to switch days.
         </Body>
       </Section>
 
