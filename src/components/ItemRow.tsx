@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { ScheduleItem } from '@/data/types';
 import { formatRange, usesTrack } from '@/lib/schedule';
+import { ItemTitle } from './ItemTitle';
 import { colors, itemColors } from './theme';
 
 interface Props {
@@ -29,10 +30,9 @@ export function ItemRow({ item, status = 'future', right }: Props) {
       </View>
       <View style={styles.body}>
         <Text style={styles.time}>{formatRange(item)}</Text>
-        <Text style={styles.title}>
-          {item.title}
+        <ItemTitle item={item} style={styles.title}>
           {!usesTrack(item) ? <Text style={styles.tag}>  · off track</Text> : null}
-        </Text>
+        </ItemTitle>
       </View>
       {status === 'now' ? <Text style={styles.nowBadge}>NOW</Text> : null}
       {right}

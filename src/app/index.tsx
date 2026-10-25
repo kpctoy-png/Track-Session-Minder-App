@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EventPicker } from '@/components/EventPicker';
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { PreviewClock } from '@/components/PreviewClock';
+import { ItemTitle } from '@/components/ItemTitle';
 import { colors, itemColors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
 import { bookingName, coachingTimes, coachingTitle, sessionsFor } from '@/lib/coaching';
@@ -123,7 +124,11 @@ function Card({ label, item, title, subtitle, big, time, notes, highlight }: Car
       </View>
       <View style={styles.cardBody}>
         <Text style={styles.cardLabel}>{label.toUpperCase()}</Text>
-        <Text style={[styles.cardTitle, big && styles.cardTitleBig]}>{item?.title ?? title}</Text>
+        {item ? (
+          <ItemTitle item={item} style={[styles.cardTitle, big && styles.cardTitleBig]} size={big ? 32 : 22} />
+        ) : (
+          <Text style={[styles.cardTitle, big && styles.cardTitleBig]}>{title}</Text>
+        )}
         {item || time ? <Text style={styles.cardTime}>{item ? formatRange(item) : time}</Text> : null}
         {subtitle ? <Text style={[styles.cardSub, big && styles.cardSubBig]}>{subtitle}</Text> : null}
         {notes ? <Text style={styles.cardTime}>{notes}</Text> : null}
