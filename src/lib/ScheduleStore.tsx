@@ -8,7 +8,8 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { SAMPLE_CLUBS, SAMPLE_EVENTS } from '@/data/sampleEvents';
-import type { Club, EventDay, ScheduleItem, TrackEvent } from '@/data/types';
+import type { Club, CoachingSession, EventDay, ScheduleItem, TrackEvent } from '@/data/types';
+import { normalizeEmail } from './coaching';
 import { todayISO } from './dates';
 import { sortItems } from './schedule';
 import { supabase } from './supabase';
@@ -39,6 +40,14 @@ interface ScheduleStore {
   sync: { status: SyncStatus; message?: string };
   /** False when the database has no events yet; event and day are then empty placeholders. */
   hasEvents: boolean;
+  /** Coaching sessions this person may see: their own, plus every session of the clubs they manage. */
+  coaching: CoachingSession[];
+  /** The signed-in person's email (or the practice-mode stand-in), lowercased. */
+  myEmail: string | null;
+  setPracticeEmail: (email: string | null) => void;
+  /** Resolves to an error message, or null once saved. */
+  addCoaching: (session: Omit<CoachingSession, 'id'>) => Promise<string | null>;
+  removeCoaching: (id: string) => Promise<string | null>;
   /** Signed-in admin; always null when there is no database. */
   session: Session | null;
   /** Clubs whose events the signed-in admin may change. */
@@ -98,6 +107,37 @@ async function fetchEvents(): Promise<TrackEvent[]> {
 
 // Stands in when there are no events, so the tabs (and Admin's New event button) still work.
 const NO_EVENT: TrackEvent = { id: '', clubId: '', name: 'No events yet', track: '', location: '', days: [{ id: '', label: '', date: '', items: [] }] };
+interface CoachingRow {
+  id: string;
+  day_id: string;
+  item_id: string | null;
+  student_email: string;
+  coach: string;
+  start_time: string;
+  end_time: string;
+  notes: string | null;
+}
+
+function toCoaching(row: CoachingRow): CoachingSession {
+  return {
+    id: row.id,
+    dayId: row.day_id,
+    itemId: row.item_id ?? undefined,
+    studentEmail: row.student_email,
+    coach: row.coach,
+    start: row.start_time,
+    end: row.end_time,
+    notes: row.notes ?? undefined,
+  };
+}
+
+async function fetchCoaching(): Promise<CoachingSession[]> {
+  if (!supabase) return [];
+  // Row level security returns only the rows this person may see.
+  const { data, error } = await supabase.from('coaching_sessions').select('*').order('start_time');
+  if (error) throw error;
+  return (data as CoachingRow[]).map(toCoaching);
+}
 
 function replaceDay(events: TrackEvent[], day: EventDay): TrackEvent[] {
   return events.map((e) => ({ ...e, days: e.days.map((d) => (d.id === day.id ? day : d)) }));
@@ -115,6 +155,8 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   const [dayId, setDayId] = useState<string | null>(null);
   // How far the preview clock is moved from the real time of day, in minutes.
   const [previewOffset, setPreviewOffset] = useState(0);
+  const [coaching, setCoaching] = useState<CoachingSession[]>([]);
+  const [practiceEmail, setPracticeEmail] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -147,6 +189,9 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'event_days' }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'clubs' }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'coaching_sessions' }, () =>
+        fetchCoaching().then(setCoaching, () => {}),
+      )
       .subscribe();
 
     client.auth.getSession().then(({ data }) => !cancelled && setSession(data.session));
@@ -158,6 +203,21 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       auth.subscription.unsubscribe();
     };
   }, []);
+
+  // Coaching depends on who is signed in, so load it again when that changes.
+  useEffect(() => {
+    if (!supabase) return;
+    if (!session) return setCoaching([]);
+    let cancelled = false;
+    // A failure here (say, before setup.sql adds the table) only hides coaching, not the schedule.
+    fetchCoaching().then(
+      (rows) => !cancelled && setCoaching(rows),
+      () => !cancelled && setCoaching([]),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id]);
 
   // Look up which clubs the signed-in admin may edit.
   useEffect(() => {
@@ -259,6 +319,42 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       sync,
       hasEvents: events.length > 0,
       session,
+      coaching,
+      myEmail: supabase ? (session?.user.email ? normalizeEmail(session.user.email) : null) : practiceEmail,
+      setPracticeEmail: (email) => setPracticeEmail(email ? normalizeEmail(email) : null),
+      addCoaching: async (draft) => {
+        const next = { ...draft, studentEmail: normalizeEmail(draft.studentEmail) };
+        if (!supabase) {
+          setCoaching((all) => [...all, { ...next, id: `practice-${Date.now()}` }]);
+          return null;
+        }
+        const { data, error } = await supabase
+          .from('coaching_sessions')
+          .insert({
+            day_id: next.dayId,
+            item_id: next.itemId ?? null,
+            student_email: next.studentEmail,
+            coach: next.coach,
+            start_time: next.start,
+            end_time: next.end,
+            notes: next.notes ?? null,
+          })
+          .select('*');
+        if (error) return error.message;
+        if (!data?.length) return 'The coaching session was not saved. Try signing in again.';
+        const saved = toCoaching(data[0] as CoachingRow);
+        setCoaching((all) => (all.some((c) => c.id === saved.id) ? all : [...all, saved]));
+        return null;
+      },
+      removeCoaching: async (id) => {
+        if (supabase) {
+          const { data, error } = await supabase.from('coaching_sessions').delete().eq('id', id).select('id');
+          if (error) return error.message;
+          if (!data?.length) return 'The coaching session was not removed. Try signing in again.';
+        }
+        setCoaching((all) => all.filter((c) => c.id !== id));
+        return null;
+      },
       manageableClubs: clubs.filter((c) => canManage(c.id)),
       canManage,
       clock: {
@@ -269,7 +365,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         resetPreview: () => setPreviewOffset(0),
       },
     };
-  }, [clubs, events, event, day, isLive, now, previewOffset, sync, session, rights]);
+  }, [clubs, events, event, day, isLive, now, previewOffset, sync, session, rights, coaching, practiceEmail]);
 
   if (!store) return <LoadingOrError status={sync.status} message={sync.message} />;
   return <Context.Provider value={store}>{children}</Context.Provider>;

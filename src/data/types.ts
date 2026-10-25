@@ -41,3 +41,16 @@ export interface TrackEvent {
   location: string;
   days: EventDay[];
 }
+
+/** A paid coaching session for one student, usually during one of their run group's sessions. */
+export interface CoachingSession {
+  id: string;
+  dayId: string;
+  /** The schedule item it rides along with, so it follows "running late" shifts. */
+  itemId?: string;
+  studentEmail: string;
+  coach: string;
+  start: string;
+  end: string;
+  notes?: string;
+}

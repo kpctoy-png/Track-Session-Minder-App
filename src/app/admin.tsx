@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { CoachingAdmin } from '@/components/CoachingAdmin';
 import { EventPicker } from '@/components/EventPicker';
 import { ItemRow } from '@/components/ItemRow';
 import { NewEventForm } from '@/components/NewEventForm';
@@ -118,6 +119,8 @@ export default function AdminScreen() {
               ) : null}
             </View>
           ))}
+
+          <CoachingAdmin />
         </>
       ) : (
         <Text style={styles.sub}>
@@ -125,7 +128,9 @@ export default function AdminScreen() {
             ? manageableClubs.length
               ? 'There are no events yet. Tap + New event to add one.'
               : 'There are no events yet, and this account is not an organizer account.'
-            : `${clubName} events can only be changed by ${clubName} admins. Choose one of your own events to edit.`}
+            : manageableClubs.length
+              ? `${clubName} events can only be changed by ${clubName} admins. Choose one of your own events to edit.`
+              : 'This account is not an organizer account, so it can view schedules but not change them.'}
         </Text>
       )}
     </ScrollView>
