@@ -209,9 +209,10 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
     if (!session) return setCoaching([]);
     let cancelled = false;
+    // A failure here (say, before setup.sql adds the table) only hides coaching, not the schedule.
     fetchCoaching().then(
       (rows) => !cancelled && setCoaching(rows),
-      (err: Error) => !cancelled && setSync({ status: 'error', message: err.message }),
+      () => !cancelled && setCoaching([]),
     );
     return () => {
       cancelled = true;
