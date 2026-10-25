@@ -33,10 +33,10 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
       </Section>
 
       <Section title="Now tab: what's happening">
-        <Step>The big card shows who's on track right now and how long is left.</Step>
-        <Step>Up next shows the next group and a countdown, so you know when to head to grid.</Step>
-        <Step>Also happening lists classroom sessions and breaks running alongside.</Step>
-        <Body>Before the event day, the Now tab shows a preview of the day. Use the −15 / +15 buttons to step through it.</Body>
+        <Step>The big card at the top shows which group is on track right now and how much time is left.</Step>
+        <Step>“Up next” shows the next group and a countdown, so you know when to head to the grid.</Step>
+        <Step>“Also happening” lists classroom sessions and breaks that run at the same time.</Step>
+        <Body>Before the event day, the Now tab shows a preview of the day. Use the “−15” and “+15” buttons to step through it.</Body>
       </Section>
 
       <Section title="Schedule tab: the whole day">
