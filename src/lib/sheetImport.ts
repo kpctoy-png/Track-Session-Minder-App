@@ -1,11 +1,18 @@
 // Reads a schedule laid out the way the Just Track It sheets are: a header row
-// of day names (SATURDAY, SUNDAY), and under each day a time column
-// ("8:00 - 8:25") next to a title column ("Intermediate 2").
+// of day names (SATURDAY, SUNDAY, or one "Friday December 4 2026"), and under
+// each day a time column ("8:00 - 8:25") next to a title column ("Intermediate 2").
 
 import type { ItemKind, RunGroupId, ScheduleItem } from '@/data/types';
 import { fromMinutes } from './schedule';
 
 const DAY_NAMES = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+
+/** "SATURDAY" or "Friday December 4 2026" -> the day's name; anything else (like "Friday 6:00 - 7:20") -> null. */
+function dayHeader(cell: string | undefined): string | null {
+  const m = /^([a-z]+)(,?\s+[a-z]+\.?\s+\d{1,2}(st|nd|rd|th)?(,?\s+\d{4})?)?$/i.exec(cell?.trim() ?? '');
+  const name = m?.[1].toUpperCase();
+  return name && DAY_NAMES.includes(name) ? name : null;
+}
 
 export interface ImportedDay {
   label: string; // "Saturday"
@@ -56,18 +63,18 @@ const isBlank = (row: string[] | undefined) => !row || row.every((c) => !c?.trim
 
 /** Parses the first schedule block in the grid. Later copies of the block (some tabs repeat it) are ignored. */
 export function parseScheduleGrid(rows: string[][]): ImportedDay[] {
-  const headerIndex = rows.findIndex((row) => row.some((c) => DAY_NAMES.includes(c?.trim().toUpperCase())));
+  const headerIndex = rows.findIndex((row) => row.some((c) => dayHeader(c)));
   if (headerIndex < 0) return [];
   const header = rows[headerIndex];
   const columns = header
-    .map((c, i) => ({ name: c?.trim().toUpperCase(), col: i }))
-    .filter((c) => DAY_NAMES.includes(c.name));
+    .map((c, i) => ({ name: dayHeader(c), col: i }))
+    .filter((c): c is { name: string; col: number } => !!c.name);
 
   const days: ImportedDay[] = columns.map((c) => ({ label: c.name[0] + c.name.slice(1).toLowerCase(), items: [] }));
   for (let r = headerIndex + 1; r < rows.length; r++) {
     const row = rows[r];
     if (isBlank(row)) break;
-    if (row.some((c) => DAY_NAMES.includes(c?.trim().toUpperCase()))) break;
+    if (row.some((c) => dayHeader(c))) break;
     columns.forEach(({ col }, d) => {
       const times = parseTimes(row[col] ?? '');
       const title = cleanTitle(row[col + 1] ?? '');

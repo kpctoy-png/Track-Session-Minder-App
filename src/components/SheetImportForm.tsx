@@ -32,7 +32,7 @@ export function SheetImportForm({ onDone }: { onDone: () => void }) {
     setImported(null);
     try {
       const days = parseScheduleGrid(await fetchSheetTab(id, tab.trim()));
-      if (!days.length) setError('No schedule found on that tab. Check the tab name: it needs a SATURDAY / SUNDAY header row.');
+      if (!days.length) setError('No schedule found on that tab. Check the tab name: it needs a header row with the day, like SATURDAY or "Friday December 4 2026".');
       else setImported(days);
     } catch (err) {
       setError(
