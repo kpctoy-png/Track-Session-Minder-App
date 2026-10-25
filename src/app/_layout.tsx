@@ -29,6 +29,7 @@ export default function RootLayout() {
           <Tabs.Screen name="events" options={{ title: 'Events', tabBarIcon: icon('▦') }} />
           <Tabs.Screen name="index" options={{ title: 'Now', tabBarIcon: icon('◉') }} />
           <Tabs.Screen name="schedule" options={{ title: 'Schedule', tabBarIcon: icon('☰') }} />
+          <Tabs.Screen name="me" options={{ title: 'Me', tabBarIcon: icon('☺') }} />
           <Tabs.Screen name="admin" options={{ title: 'Admin', tabBarIcon: icon('✎') }} />
         </Tabs>
       </ScheduleProvider>

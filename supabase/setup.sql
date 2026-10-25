@@ -120,6 +120,36 @@ drop policy if exists "Platform admins manage club admins" on club_admins;
 create policy "Platform admins manage club admins" on club_admins for all to authenticated
   using (is_platform_admin()) with check (is_platform_admin());
 
+-- Paid coaching sessions, each assigned to one student by email. Linking it
+-- to a schedule item (item_id) lets it follow "running late" shifts; the
+-- times are kept too in case that item is later replaced.
+create table if not exists coaching_sessions (
+  id uuid primary key default gen_random_uuid(),
+  day_id text not null references event_days (id) on delete cascade,
+  item_id text,
+  student_email text not null check (student_email = lower(student_email)),
+  coach text not null default '',
+  start_time text not null,
+  end_time text not null,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create or replace function club_of_day(day text) returns text
+  language sql stable security definer set search_path = public as $$
+  select events.club_id from event_days join events on events.id = event_days.event_id where event_days.id = day;
+$$;
+
+alter table coaching_sessions enable row level security;
+
+-- Students see only their own sessions; club admins see and manage their club's.
+drop policy if exists "Students and club admins read coaching" on coaching_sessions;
+create policy "Students and club admins read coaching" on coaching_sessions for select to authenticated
+  using (student_email = lower(auth.jwt() ->> 'email') or can_manage_club(club_of_day(day_id)));
+drop policy if exists "Club admins manage coaching" on coaching_sessions;
+create policy "Club admins manage coaching" on coaching_sessions for all to authenticated
+  using (can_manage_club(club_of_day(day_id))) with check (can_manage_club(club_of_day(day_id)));
+
 -- Send changes to phones as they happen.
 do $$
 begin
@@ -130,6 +160,12 @@ end $$;
 do $$
 begin
   alter publication supabase_realtime add table clubs;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table coaching_sessions;
 exception when duplicate_object then null;
 end $$;
 

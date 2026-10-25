@@ -21,7 +21,7 @@ export function formatTime(hhmm: string): string {
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${suffix}`;
 }
 
-export function formatRange(item: ScheduleItem): string {
+export function formatRange(item: Pick<ScheduleItem, 'start' | 'end'>): string {
   return `${formatTime(item.start)} – ${formatTime(item.end)}`;
 }
 
