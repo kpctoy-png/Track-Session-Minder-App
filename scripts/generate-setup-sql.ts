@@ -14,7 +14,7 @@ const lines = [
 ];
 SAMPLE_EVENTS.forEach((e, i) => {
   lines.push(
-    `insert into events (id, name, track, location, sort) values (${q(e.id)}, ${q(e.name)}, ${q(e.track)}, ${q(e.location)}, ${i})`,
+    `insert into events (id, club_id, name, track, location, sort) values (${q(e.id)}, ${q(e.clubId)}, ${q(e.name)}, ${q(e.track)}, ${q(e.location)}, ${i})`,
     '  on conflict (id) do nothing;',
   );
   for (const d of e.days) {

@@ -9,6 +9,7 @@ function slug(text: string): string {
 }
 
 interface NewEventInput {
+  clubId: string;
   name: string;
   track: string;
   location: string;
@@ -18,10 +19,11 @@ interface NewEventInput {
   template?: TrackEvent;
 }
 
-export function buildEvent({ name, track, location, startDate, dayCount, template }: NewEventInput): TrackEvent {
-  const id = `${slug(track)}-${startDate}`;
+export function buildEvent({ clubId, name, track, location, startDate, dayCount, template }: NewEventInput): TrackEvent {
+  const id = `${clubId}-${slug(track)}-${startDate}`;
   return {
     id,
+    clubId,
     name: name.trim(),
     track: track.trim(),
     location: location.trim(),

@@ -1,7 +1,7 @@
 // Sample events copied from the Just Track It schedule PDFs. They stand in
 // for the online database until it is connected.
 
-import type { EventDay, ItemKind, RunGroupId, ScheduleItem, TrackEvent } from './types';
+import type { Club, EventDay, ItemKind, RunGroupId, ScheduleItem, TrackEvent } from './types';
 
 type Code =
   | 'MTG' | 'CLASS' | 'LADIES_CLASS' | 'LADIES_WRAP' | 'LUNCH' | 'PARADE'
@@ -34,9 +34,12 @@ function day(id: string, label: string, date: string, rows: [string, string, Cod
   return { id, label, date, items };
 }
 
+export const SAMPLE_CLUBS: Club[] = [{ id: 'just-track-it', name: 'Just Track It', website: 'https://justtrackit.net' }];
+
 export const SAMPLE_EVENTS: TrackEvent[] = [
   {
     id: 'roebling-oct-2026',
+    clubId: 'just-track-it',
     name: 'Roebling Road Weekend',
     track: 'Roebling Road Raceway',
     location: 'Bloomingdale, GA',
@@ -94,6 +97,7 @@ export const SAMPLE_EVENTS: TrackEvent[] = [
   },
   {
     id: 'barber-nov-2026',
+    clubId: 'just-track-it',
     name: 'Barber Weekend',
     track: 'Barber Motorsports Park',
     location: 'Birmingham, AL',

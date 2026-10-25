@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { shortDate } from '@/lib/dates';
 import { useSchedule } from '@/lib/ScheduleStore';
+import { ClubLogo } from './ClubLogo';
 import { colors } from './theme';
 
 function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
@@ -14,11 +15,12 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
 }
 
 export function EventPicker() {
-  const { event, day, selectDay } = useSchedule();
+  const { clubs, event, day, selectDay } = useSchedule();
   return (
     <View style={styles.wrap}>
       <Link href="/events" asChild>
         <Pressable style={styles.event}>
+          <ClubLogo club={clubs.find((c) => c.id === event.clubId)} height={36} />
           <View style={styles.eventText}>
             <Text style={styles.eventName}>{event.name}</Text>
             <Text style={styles.eventTrack}>

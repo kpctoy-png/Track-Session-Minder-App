@@ -16,11 +16,15 @@ Built with [Expo](https://expo.dev) (React Native) and Expo Router.
 
 ## Online database
 
-Schedules live in [Supabase](https://supabase.com). Anyone can read them;
-only signed-in admins can change them, and every change reaches open apps
-within seconds.
+Schedules live in [Supabase](https://supabase.com). Anyone can read them,
+and every change reaches open apps within seconds. Each event belongs to a
+club: a club's admins can change only that club's events, and platform
+admins (Redline Techniques) can change everything. `supabase/admin-snippets.sql`
+has copy-and-paste SQL for adding clubs and admins. Club logos live in
+`assets/clubs/` (or a club's `logo_url`).
 
-1. Run `supabase/setup.sql` once in the Supabase SQL Editor.
+1. Run `supabase/setup.sql` in the Supabase SQL Editor (again after updates that change it; it only adds what's missing).
+   The first run makes the accounts that already exist platform admins.
 2. Turn off public sign-ups (Authentication → Sign In / Providers) and add
    admins under Authentication → Users.
 3. Put the project URL and publishable key in `.env`:
