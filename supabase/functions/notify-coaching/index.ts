@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
   const when = `<b>${escape(d.date)}, ${d.time}</b>`;
   const notes = c.notes ? [`Note: ${escape(c.notes)}`] : [];
   const signIn = (email: string) =>
-    `Sign in on the app's <b>Me</b> tab with ${escape(email)} to see it on your schedule, with a countdown. If the day runs late, the app shows the new time.`;
+    `Sign in on the app's <b>My Day</b> tab with ${escape(email)} to see it on your schedule, with a countdown. If the day runs late, the app shows the new time.`;
   const checkRide = c.kind === 'checkride';
   const noun = checkRide ? 'check ride' : 'coaching session';
   const Title = checkRide ? 'Check ride' : 'Coaching';

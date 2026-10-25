@@ -41,7 +41,7 @@ export function FeedbackAdmin({ eventId, title }: { eventId: string | null; titl
       ) : !entries ? (
         <Text style={styles.sub}>Loading…</Text>
       ) : !entries.length ? (
-        <Text style={styles.sub}>No feedback yet. Drivers leave it from the Me tab.</Text>
+        <Text style={styles.sub}>No feedback yet. Drivers leave it from the My Day tab.</Text>
       ) : (
         <>
           <Text style={styles.summary}>
