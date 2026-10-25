@@ -1,6 +1,6 @@
 // Emails the student (and the coach, if given) when a coaching session is
-// booked, changed or removed. A Database Webhook on coaching_sessions calls
-// this function; see README "Coaching emails" for the setup.
+// booked, changed or removed. A trigger on coaching_sessions (supabase/schema.sql)
+// calls this function; see README "Coaching emails" for the setup.
 //
 // Secrets (Edge Functions -> Secrets): SMTP_USER (the Google address) and
 // SMTP_PASS (its app password). SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
@@ -67,12 +67,18 @@ async function send(to: string[], subject: string, lines: string[]) {
   await mailer.sendMail({ from: `Track Session Minder <${Deno.env.get('SMTP_USER')}>`, to, subject, html });
 }
 
+async function fromDatabase(req: Request): Promise<boolean> {
+  if (req.headers.get('Authorization') === `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`) return true;
+  const given = req.headers.get('x-webhook-secret');
+  if (!given) return false;
+  const { data } = await db.from('webhook_secrets').select('secret').eq('name', 'notify-coaching').single();
+  return !!data && data.secret === given;
+}
+
 Deno.serve(async (req) => {
-  // Only the database webhook may call this; it sends the service role key. Without this check, anyone with
-  // the app's public key could make the function email any address.
-  if (req.headers.get('Authorization') !== `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`) {
-    return new Response('forbidden', { status: 403 });
-  }
+  // Only the database may call this: its trigger sends a secret from the webhook_secrets table (or, from a
+  // dashboard webhook, the service role key). Without this check, anyone could make the function email any address.
+  if (!(await fromDatabase(req))) return new Response('forbidden', { status: 403 });
   const { type, record, old_record } = (await req.json()) as Payload;
   const c = record ?? old_record;
   if (!c) return new Response('nothing to do');

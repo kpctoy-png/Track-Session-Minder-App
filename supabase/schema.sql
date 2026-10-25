@@ -151,6 +151,43 @@ drop policy if exists "Club admins manage coaching" on coaching_sessions;
 create policy "Club admins manage coaching" on coaching_sessions for all to authenticated
   using (can_manage_club(club_of_day(day_id))) with check (can_manage_club(club_of_day(day_id)));
 
+-- Email the student and coach when a booking is added, changed or removed, by
+-- calling the notify-coaching Edge Function (supabase/functions). The call
+-- carries a random secret that only this database and the function can read.
+create extension if not exists pg_net;
+
+create table if not exists webhook_secrets (
+  name text primary key,
+  secret text not null default replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')
+);
+-- No policies: the app can't read it; only the database and the service role can.
+alter table webhook_secrets enable row level security;
+insert into webhook_secrets (name) values ('notify-coaching') on conflict (name) do nothing;
+
+create or replace function notify_coaching() returns trigger
+  language plpgsql security definer set search_path = public as $$
+begin
+  perform net.http_post(
+    url := 'https://trxqycpyhnzfyctajmsb.supabase.co/functions/v1/notify-coaching',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      -- The public anon key, only to get past the gateway; the secret below is the real check.
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyeHF5Y3B5aG56ZnljdGFqbXNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5MzU1NTUsImV4cCI6MjEwODUxMTU1NX0.SgVMF1hovWoW1s_t39vxw6Tp22KvZwQdqb6M7OMwfw0',
+      'x-webhook-secret', (select secret from webhook_secrets where name = 'notify-coaching')
+    ),
+    body := jsonb_build_object(
+      'type', tg_op,
+      'record', case when tg_op = 'DELETE' then null else to_jsonb(new) end,
+      'old_record', case when tg_op = 'INSERT' then null else to_jsonb(old) end
+    )
+  );
+  return null;
+end $$;
+
+drop trigger if exists coaching_emails on coaching_sessions;
+create trigger coaching_emails after insert or update or delete on coaching_sessions
+  for each row execute function notify_coaching();
+
 -- Star ratings and comments from drivers. event_id null means feedback about
 -- the app itself, which only platform admins read.
 create table if not exists feedback (

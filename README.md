@@ -56,16 +56,15 @@ coach, if their email was entered) get an email. It is sent by the Supabase
 Edge Function in `supabase/functions/notify-coaching`, using the same Google
 account as the sign-in emails. One-time setup in the Supabase dashboard:
 
-1. Run `supabase/setup.sql` again (it adds the coach email column).
+1. Run `supabase/setup.sql` again. It adds the coach email column and the
+   trigger that calls the function.
 2. Edge Functions → Deploy a new function → Via Editor. Name it
    `notify-coaching`, replace the sample code with
    `supabase/functions/notify-coaching/index.ts`, and click Deploy.
 3. Edge Functions → Secrets: add `SMTP_USER` (the Google address) and
    `SMTP_PASS` (its app password).
-4. Database → Webhooks → Create a new hook: table `coaching_sessions`, events
-   Insert, Update and Delete, type Supabase Edge Functions, function
-   `notify-coaching`, then click **Add auth header with service key** and create it.
-   The function refuses calls without that header.
+
+No dashboard webhook is needed (creating one as well would send every email twice).
 
 ### Feedback
 
