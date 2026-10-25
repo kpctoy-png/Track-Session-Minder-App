@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { RUN_GROUPS } from '@/data/runGroups';
 import { colors } from './theme';
 
-/** A short how-to for drivers, opened from the Me tab. */
+/** A short how-to for drivers, opened from the My Day tab. */
 export function DriverGuide({ onDone }: { onDone: () => void }) {
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -56,14 +56,14 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
 
       <Section title="Coaching and check rides">
         <Body>
-          If you've booked a coaching session or check ride, you'll get an email. To see it in the app, open the Me tab,
+          If you've booked a coaching session or check ride, you'll get an email. To see it in the app, open the My Day tab,
           enter that same email, and type the code we email you (no password). Your booking then shows on Now with a
           countdown, on Schedule with a badge, and on Me. If the day runs late, its time moves too.
         </Body>
       </Section>
 
       <Section title="Tell us how it went">
-        <Body>On the Me tab, tap Rate an event or the app to leave 1 to 5 stars and a comment. No sign-in needed.</Body>
+        <Body>On the My Day tab, tap Rate an event or the app to leave 1 to 5 stars and a comment. No sign-in needed.</Body>
       </Section>
 
       <Section title="If something looks off">

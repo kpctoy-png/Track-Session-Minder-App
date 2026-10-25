@@ -68,7 +68,7 @@ export function CoachingAdmin() {
       <Text style={styles.heading}>Coaching and check rides</Text>
       <Text style={styles.sub}>
         Book a paid coaching session or a check ride for one student. The student and instructor each get an email, and see
-        it in the app after signing in on the Me tab. Nobody can be booked twice at the same time.
+        it in the app after signing in on the My Day tab. Nobody can be booked twice at the same time.
       </Text>
       {booked.map(({ session, start, end }) => (
         <View key={session.id} style={styles.row}>

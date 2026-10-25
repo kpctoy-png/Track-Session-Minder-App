@@ -35,7 +35,7 @@ Without `.env`, the app runs on the built-in sample events in practice mode.
 ### Coaching sessions and driver sign-in
 
 Admins book a paid coaching session for one student by email (Admin tab →
-Coaching). The student signs in on the Me tab with a one-time code emailed to
+Coaching). The student signs in on the My Day tab with a one-time code emailed to
 them, then sees the session on Me, on Now (with a countdown) and on Schedule.
 If the coach's email is entered, the coach sees it too after signing in with that email.
 Only that student, the coach and the club's admins can see it. Check rides are booked
@@ -75,7 +75,7 @@ No dashboard webhook is needed (creating one as well would send every email twic
 ### Feedback
 
 Drivers rate an event or the app from 1 to 5 stars, with an optional comment,
-from the Me tab (no sign-in needed). Club admins see the average and comments
+from the My Day tab (no sign-in needed). Club admins see the average and comments
 for their events at the bottom of the Admin tab; platform admins also see
 feedback about the app.
 
