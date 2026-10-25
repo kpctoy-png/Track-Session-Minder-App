@@ -10,7 +10,7 @@ export const RUN_GROUPS: Record<RunGroupId, { name: string; short: string; color
 
 export const KIND_COLORS = {
   classroom: '#FFD60A',
-  meeting: '#FF9F0A',
+  meeting: '#B8B8C0',
   break: '#8E8E93',
   parade: '#64D2FF',
 } as const;
