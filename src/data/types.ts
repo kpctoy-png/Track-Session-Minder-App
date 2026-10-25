@@ -50,6 +50,8 @@ export interface CoachingSession {
   itemId?: string;
   studentEmail: string;
   coach: string;
+  /** Gets a copy of the booking email. */
+  coachEmail?: string;
   start: string;
   end: string;
   notes?: string;
