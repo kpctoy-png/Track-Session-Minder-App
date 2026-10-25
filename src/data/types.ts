@@ -54,3 +54,14 @@ export interface CoachingSession {
   end: string;
   notes?: string;
 }
+
+/** A driver's star rating, about one event or (eventId missing) the app itself. */
+export interface Feedback {
+  id: string;
+  eventId?: string;
+  rating: number;
+  comment?: string;
+  name?: string;
+  email?: string;
+  createdAt: string;
+}
