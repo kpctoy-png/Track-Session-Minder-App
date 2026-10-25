@@ -138,6 +138,9 @@ create or replace function club_of_day(day text) returns text
   select events.club_id from event_days join events on events.id = event_days.event_id where event_days.id = day;
 $$;
 
+-- Optional: the coach gets a copy of the booking email.
+alter table coaching_sessions add column if not exists coach_email text;
+
 alter table coaching_sessions enable row level security;
 
 -- Students see only their own sessions; club admins see and manage their club's.

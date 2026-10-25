@@ -12,6 +12,7 @@ export function CoachingAdmin() {
   const [adding, setAdding] = useState(false);
   const [email, setEmail] = useState('');
   const [coach, setCoach] = useState('');
+  const [coachEmail, setCoachEmail] = useState('');
   const [itemId, setItemId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +27,7 @@ export function CoachingAdmin() {
   const save = async () => {
     const item = items.find((i) => i.id === itemId);
     if (!isEmail(email)) return setError("Enter the student's email. They sign in with it to see the session.");
+    if (coachEmail.trim() && !isEmail(coachEmail)) return setError("Check the coach's email, or leave it empty.");
     if (!item) return setError('Pick the session the coaching happens in.');
     setBusy(true);
     const problem = await addCoaching({
@@ -33,6 +35,7 @@ export function CoachingAdmin() {
       itemId: item.id,
       studentEmail: email,
       coach: coach.trim(),
+      coachEmail: coachEmail.trim() || undefined,
       start: item.start,
       end: item.end,
       notes: notes.trim() || undefined,
@@ -49,7 +52,9 @@ export function CoachingAdmin() {
   return (
     <View>
       <Text style={styles.heading}>Coaching</Text>
-      <Text style={styles.sub}>Book a paid coaching session for one student. Only that student sees it, after signing in on the Me tab.</Text>
+      <Text style={styles.sub}>
+        Book a paid coaching session for one student. They get an email, and see it in the app after signing in on the Me tab.
+      </Text>
       {booked.map(({ session, start, end }) => (
         <View key={session.id} style={styles.row}>
           <View style={styles.rowBody}>
@@ -89,6 +94,16 @@ export function CoachingAdmin() {
             placeholderTextColor={colors.muted}
             value={coach}
             onChangeText={setCoach}
+          />
+          <TextInput
+            id="coach-email"
+            style={styles.input}
+            placeholder="Coach's email (optional, they get a copy)"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            value={coachEmail}
+            onChangeText={setCoachEmail}
           />
           <Text style={styles.label}>During which session?</Text>
           <View style={styles.chips}>

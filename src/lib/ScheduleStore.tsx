@@ -118,6 +118,7 @@ interface CoachingRow {
   item_id: string | null;
   student_email: string;
   coach: string;
+  coach_email: string | null;
   start_time: string;
   end_time: string;
   notes: string | null;
@@ -130,6 +131,7 @@ function toCoaching(row: CoachingRow): CoachingSession {
     itemId: row.item_id ?? undefined,
     studentEmail: row.student_email,
     coach: row.coach,
+    coachEmail: row.coach_email ?? undefined,
     start: row.start_time,
     end: row.end_time,
     notes: row.notes ?? undefined,
@@ -342,6 +344,8 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
             item_id: next.itemId ?? null,
             student_email: next.studentEmail,
             coach: next.coach,
+            // Sent only when filled in, so booking still works on a database that predates the column.
+            ...(next.coachEmail ? { coach_email: normalizeEmail(next.coachEmail) } : {}),
             start_time: next.start,
             end_time: next.end,
             notes: next.notes ?? null,

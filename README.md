@@ -49,6 +49,24 @@ Driver sign-in needs three settings in Supabase:
    (for example Resend or SendGrid). Supabase's built-in sender only emails
    the project's team members and only a few emails an hour.
 
+### Coaching emails
+
+When a coaching session is booked, changed or removed, the student (and the
+coach, if their email was entered) get an email. It is sent by the Supabase
+Edge Function in `supabase/functions/notify-coaching`, using the same Google
+account as the sign-in emails. One-time setup in the Supabase dashboard:
+
+1. Run `supabase/setup.sql` again (it adds the coach email column).
+2. Edge Functions → Deploy a new function → Via Editor. Name it
+   `notify-coaching`, replace the sample code with
+   `supabase/functions/notify-coaching/index.ts`, and click Deploy.
+3. Edge Functions → Secrets: add `SMTP_USER` (the Google address) and
+   `SMTP_PASS` (its app password).
+4. Database → Webhooks → Create a new hook: table `coaching_sessions`, events
+   Insert, Update and Delete, type Supabase Edge Functions, function
+   `notify-coaching`, then click **Add auth header with service key** and create it.
+   The function refuses calls without that header.
+
 ### Feedback
 
 Drivers rate an event or the app from 1 to 5 stars, with an optional comment,
