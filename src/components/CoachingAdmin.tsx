@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { coachingTimes, isEmail } from '@/lib/coaching';
+import { coachingTimes, findCoachClash, isEmail } from '@/lib/coaching';
 import { formatRange, formatTime, sortItems } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { colors } from './theme';
@@ -29,8 +29,7 @@ export function CoachingAdmin() {
     if (!isEmail(email)) return setError("Enter the student's email. They sign in with it to see the session.");
     if (coachEmail.trim() && !isEmail(coachEmail)) return setError("Check the coach's email, or leave it empty.");
     if (!item) return setError('Pick the session the coaching happens in.');
-    setBusy(true);
-    const problem = await addCoaching({
+    const draft = {
       dayId: day.id,
       itemId: item.id,
       studentEmail: email,
@@ -39,7 +38,14 @@ export function CoachingAdmin() {
       start: item.start,
       end: item.end,
       notes: notes.trim() || undefined,
-    });
+    };
+    const clash = findCoachClash(coaching, draft, day);
+    if (clash)
+      return setError(
+        `${draft.coach || draft.coachEmail} is already coaching ${clash.studentEmail} at ${formatRange(coachingTimes(clash, day))}. Pick another session or coach.`,
+      );
+    setBusy(true);
+    const problem = await addCoaching(draft);
     setBusy(false);
     if (problem) return setError(problem);
     setEmail('');

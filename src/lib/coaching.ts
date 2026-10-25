@@ -24,3 +24,23 @@ export function coachingTitle(session: CoachingSession, email: string | null): s
   if (isCoachOf(session, email)) return `Coaching ${session.studentEmail}`;
   return session.coach ? `With ${session.coach}` : 'Coaching session';
 }
+
+/** The same coach, matched by email, or by name when no email was entered. */
+function sameCoach(a: Pick<CoachingSession, 'coach' | 'coachEmail'>, b: Pick<CoachingSession, 'coach' | 'coachEmail'>): boolean {
+  if (a.coachEmail && b.coachEmail && normalizeEmail(a.coachEmail) === normalizeEmail(b.coachEmail)) return true;
+  const name = a.coach.trim().toLowerCase();
+  return !!name && name === b.coach.trim().toLowerCase();
+}
+
+/** An existing session on the same day that the coach of `draft` is already giving at an overlapping time. */
+export function findCoachClash(
+  sessions: CoachingSession[],
+  draft: Omit<CoachingSession, 'id'>,
+  day: EventDay,
+): CoachingSession | undefined {
+  return sessions.find((c) => {
+    if (c.dayId !== draft.dayId || !sameCoach(c, draft)) return false;
+    const t = coachingTimes(c, day);
+    return t.start < draft.end && draft.start < t.end;
+  });
+}
