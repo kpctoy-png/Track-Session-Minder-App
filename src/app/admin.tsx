@@ -62,7 +62,7 @@ export default function AdminScreen() {
       <Text style={styles.heading}>Running late?</Text>
       <Text style={styles.sub}>Shifts everything after {formatTime(fromMinutes(clock.minuteOfDay))}.</Text>
       <View style={styles.buttons}>
-        {[5, 10, 15].map((m) => (
+        {[5, 10, 15, 30, 45, 60].map((m) => (
           <Btn key={m} label={`+${m} min`} onPress={() => runLate(m)} primary />
         ))}
         <Btn label="−5 min" onPress={() => runLate(-5)} />
