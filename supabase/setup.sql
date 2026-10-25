@@ -71,10 +71,20 @@ create or replace function is_platform_admin() returns boolean
   select exists (select 1 from platform_admins where user_id = auth.uid());
 $$;
 
+-- Organizers added by email from the app (Admin → Manage organizers). They
+-- sign in with an emailed code, so no Supabase account has to be made for them.
+create table if not exists club_organizers (
+  email text not null check (email = lower(trim(email)) and email like '%_@_%'),
+  club_id text not null references clubs (id) on delete cascade,
+  added_at timestamptz not null default now(),
+  primary key (email, club_id)
+);
+
 create or replace function can_manage_club(club text) returns boolean
   language sql stable security definer set search_path = public as $$
   select is_platform_admin()
-    or exists (select 1 from club_admins where user_id = auth.uid() and club_id = club);
+    or exists (select 1 from club_admins where user_id = auth.uid() and club_id = club)
+    or exists (select 1 from club_organizers where email = lower(auth.jwt() ->> 'email') and club_id = club);
 $$;
 
 alter table clubs enable row level security;
@@ -82,6 +92,7 @@ alter table events enable row level security;
 alter table event_days enable row level security;
 alter table platform_admins enable row level security;
 alter table club_admins enable row level security;
+alter table club_organizers enable row level security;
 
 -- Anyone can read clubs and schedules.
 drop policy if exists "Anyone can read clubs" on clubs;
@@ -118,6 +129,13 @@ create policy "See own club roles" on club_admins for select to authenticated
   using (user_id = auth.uid() or is_platform_admin());
 drop policy if exists "Platform admins manage club admins" on club_admins;
 create policy "Platform admins manage club admins" on club_admins for all to authenticated
+  using (is_platform_admin()) with check (is_platform_admin());
+
+drop policy if exists "See own organizer roles" on club_organizers;
+create policy "See own organizer roles" on club_organizers for select to authenticated
+  using (email = lower(auth.jwt() ->> 'email') or is_platform_admin());
+drop policy if exists "Platform admins manage organizers" on club_organizers;
+create policy "Platform admins manage organizers" on club_organizers for all to authenticated
   using (is_platform_admin()) with check (is_platform_admin());
 
 -- Paid coaching sessions, each assigned to one student by email. Linking it

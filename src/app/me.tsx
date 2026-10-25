@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { DriverGuide } from '@/components/DriverGuide';
+import { EmailCodeSignIn } from '@/components/EmailCodeSignIn';
 import { FeedbackForm } from '@/components/FeedbackForm';
 import { colors } from '@/components/theme';
 import { bookingName, coachingTimes, coachingTitle, isCoachOf, isEmail, sessionsFor } from '@/lib/coaching';
@@ -43,7 +44,12 @@ export default function MeScreen() {
     return (
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         {topButtons}
-        <EmailCodeSignIn />
+        <EmailCodeSignIn
+          heading="Sign in"
+          intro="See the coaching sessions and check rides booked for you. We'll email you a code, no password needed."
+          emailHint="Enter the email you used to sign up for the event."
+          idPrefix="me"
+        />
       </ScrollView>
     );
   if (!supabase && !myEmail)
@@ -105,80 +111,6 @@ export default function MeScreen() {
   );
 }
 
-/** Drivers sign in with a one-time code sent to their email, so there are no passwords. */
-function EmailCodeSignIn() {
-  const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const sendCode = async () => {
-    if (!supabase) return;
-    if (!isEmail(email)) return setError('Enter the email you used to sign up for the event.');
-    setBusy(true);
-    setError(null);
-    const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true } });
-    setBusy(false);
-    if (error) setError(`Couldn't send the code: ${error.message}`);
-    else setSentTo(email.trim());
-  };
-
-  const verify = async () => {
-    if (!supabase || !sentTo) return;
-    setBusy(true);
-    setError(null);
-    const { error } = await supabase.auth.verifyOtp({ email: sentTo, token: code.trim(), type: 'email' });
-    setBusy(false);
-    if (error) setError('That code did not work. Check the newest email, or send a new code.');
-  };
-
-  return (
-    <View>
-      <Text style={styles.heading}>Sign in</Text>
-      <Text style={styles.sub}>See the coaching sessions and check rides booked for you. We'll email you a code, no password needed.</Text>
-      {sentTo ? (
-        <>
-          <Text style={styles.sub}>We sent a code to {sentTo}.</Text>
-          <TextInput
-            id="me-code"
-            style={styles.input}
-            placeholder="Code from the email"
-            placeholderTextColor={colors.muted}
-            keyboardType="number-pad"
-            autoComplete="one-time-code"
-            value={code}
-            onChangeText={setCode}
-            onSubmitEditing={verify}
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Btn label={busy ? 'Checking…' : 'Sign in'} onPress={verify} primary />
-          <Pressable onPress={() => setSentTo(null)}>
-            <Text style={styles.link}>Use a different email or send a new code</Text>
-          </Pressable>
-        </>
-      ) : (
-        <>
-          <TextInput
-            id="me-email"
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor={colors.muted}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-            onSubmitEditing={sendCode}
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Btn label={busy ? 'Sending…' : 'Email me a code'} onPress={sendCode} primary />
-        </>
-      )}
-    </View>
-  );
-}
-
 /** Without the database there's nothing to sign in to, so just pretend to be a student. */
 function PracticeSignIn({ onSubmit }: { onSubmit: (email: string) => void }) {
   const [email, setEmail] = useState('');
@@ -221,8 +153,6 @@ const styles = StyleSheet.create({
   signedIn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#10261A', borderRadius: 12, padding: 12, marginBottom: 12 },
   signedInText: { color: '#34C759', fontSize: 13, flex: 1 },
   input: { backgroundColor: colors.card, color: colors.text, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 12, fontSize: 16, marginBottom: 10 },
-  error: { color: '#FF6961', fontSize: 13, marginBottom: 8 },
-  link: { color: colors.accent, fontWeight: '600', marginTop: 14 },
   card: { backgroundColor: colors.card, borderRadius: 16, padding: 16, marginTop: 10, borderLeftWidth: 6, borderLeftColor: colors.accent },
   cardLabel: { color: colors.muted, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
   cardTitle: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 4 },

@@ -234,20 +234,24 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const client = supabase;
     const userId = session?.user.id;
+    const email = session?.user.email?.toLowerCase() ?? '';
     if (!client) return;
     if (!userId) return setRights({ all: false, clubIds: [] });
     let cancelled = false;
     Promise.all([
       client.from('platform_admins').select('user_id').eq('user_id', userId),
       client.from('club_admins').select('club_id').eq('user_id', userId),
-    ]).then(([platform, club]) => {
+      // Organizers added by email in the app.
+      client.from('club_organizers').select('club_id').eq('email', email),
+    ]).then(([platform, club, organizer]) => {
       if (cancelled) return;
-      setRights({ all: !!platform.data?.length, clubIds: (club.data ?? []).map((r) => r.club_id as string) });
+      const clubIds = [...(club.data ?? []), ...(organizer.data ?? [])].map((r) => r.club_id as string);
+      setRights({ all: !!platform.data?.length, clubIds });
     });
     return () => {
       cancelled = true;
     };
-  }, [session?.user.id]);
+  }, [session?.user.id, session?.user.email]);
 
   const canManage = (clubId: string) => rights.all || rights.clubIds.includes(clubId);
 
