@@ -12,7 +12,9 @@ export const colors = {
 };
 
 export function itemColors(item: ScheduleItem): string[] {
-  if (item.kind === 'track' && item.groups?.length) return item.groups.map((g) => RUN_GROUPS[g].color);
+  // Track sessions and group classrooms (like "Novice Classroom") take their run group's color.
+  if ((item.kind === 'track' || item.kind === 'classroom') && item.groups?.length)
+    return item.groups.map((g) => RUN_GROUPS[g].color);
   if (item.kind === 'track') return [colors.muted];
   return [KIND_COLORS[item.kind]];
 }
