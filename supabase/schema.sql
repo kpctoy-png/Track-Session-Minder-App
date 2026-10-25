@@ -155,6 +155,34 @@ drop policy if exists "Club admins manage coaching" on coaching_sessions;
 create policy "Club admins manage coaching" on coaching_sessions for all to authenticated
   using (can_manage_club(club_of_day(day_id))) with check (can_manage_club(club_of_day(day_id)));
 
+-- A coach can't be booked into two overlapping sessions on the same day. The
+-- coach is matched by email, or by name when no email was entered.
+create or replace function prevent_coach_double_booking() returns trigger
+  language plpgsql security definer set search_path = public as $$
+declare
+  clash coaching_sessions;
+begin
+  select * into clash from coaching_sessions c
+  where c.day_id = new.day_id
+    and c.id <> new.id
+    and c.start_time < new.end_time and new.start_time < c.end_time
+    and (
+      (new.coach_email is not null and lower(c.coach_email) = lower(new.coach_email))
+      or (trim(new.coach) <> '' and lower(trim(c.coach)) = lower(trim(new.coach)))
+    )
+  limit 1;
+  if found then
+    raise exception '% is already coaching % from % to % that day.',
+      coalesce(nullif(trim(new.coach), ''), new.coach_email), clash.student_email, clash.start_time, clash.end_time
+      using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists coach_double_booking on coaching_sessions;
+create trigger coach_double_booking before insert or update on coaching_sessions
+  for each row execute function prevent_coach_double_booking();
+
 -- Email the student and coach when a booking is added, changed or removed, by
 -- calling the notify-coaching Edge Function (supabase/functions). The call
 -- carries a random secret that only this database and the function can read.

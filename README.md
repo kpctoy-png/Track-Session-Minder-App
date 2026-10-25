@@ -38,7 +38,9 @@ Admins book a paid coaching session for one student by email (Admin tab →
 Coaching). The student signs in on the Me tab with a one-time code emailed to
 them, then sees the session on Me, on Now (with a countdown) and on Schedule.
 If the coach's email is entered, the coach sees it too after signing in with that email.
-Only that student, the coach and the club's admins can see it. A session is linked to a
+Only that student, the coach and the club's admins can see it. A coach can't be
+booked into two overlapping sessions on the same day (matched by coach email, or
+by name when no email was entered). A session is linked to a
 schedule item, so "running late" shifts move it too.
 
 Driver sign-in needs three settings in Supabase:
