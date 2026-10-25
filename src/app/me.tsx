@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -14,11 +14,19 @@ import { supabase } from '@/lib/supabase';
 export default function MeScreen() {
   const { events, coaching, myEmail, setPracticeEmail, selectEvent, selectDay } = useSchedule();
   const router = useRouter();
+  // A link ending in /me?guide=1 (used in invite emails) opens the guide directly.
+  const { guide } = useLocalSearchParams<{ guide?: string }>();
   const [givingFeedback, setGivingFeedback] = useState(false);
-  const [readingGuide, setReadingGuide] = useState(false);
+  const [readingGuide, setReadingGuide] = useState(guide === '1');
 
   if (givingFeedback) return <FeedbackForm onDone={() => setGivingFeedback(false)} />;
-  if (readingGuide) return <DriverGuide onDone={() => setReadingGuide(false)} />;
+  if (readingGuide) {
+    const closeGuide = () => {
+      setReadingGuide(false);
+      if (guide) router.setParams({ guide: undefined });
+    };
+    return <DriverGuide onDone={closeGuide} />;
+  }
   const topButtons = (
     <>
       <Pressable onPress={() => setReadingGuide(true)} style={styles.feedback}>
