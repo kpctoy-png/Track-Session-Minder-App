@@ -237,6 +237,9 @@ begin
 exception when duplicate_object then null;
 end $$;
 
+-- Tell the API about new tables and columns right away.
+notify pgrst, 'reload schema';
+
 -- Sample events
 insert into events (id, club_id, name, track, location, sort) values ('roebling-oct-2026', 'just-track-it', 'Roebling Road Weekend', 'Roebling Road Raceway', 'Bloomingdale, GA', 0)
   on conflict (id) do nothing;

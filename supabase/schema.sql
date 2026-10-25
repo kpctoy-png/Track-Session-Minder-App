@@ -234,3 +234,6 @@ begin
   alter publication supabase_realtime add table coaching_sessions;
 exception when duplicate_object then null;
 end $$;
+
+-- Tell the API about new tables and columns right away.
+notify pgrst, 'reload schema';
