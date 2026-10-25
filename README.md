@@ -49,6 +49,13 @@ Driver sign-in needs three settings in Supabase:
    (for example Resend or SendGrid). Supabase's built-in sender only emails
    the project's team members and only a few emails an hour.
 
+### Feedback
+
+Drivers rate an event or the app from 1 to 5 stars, with an optional comment,
+from the Me tab (no sign-in needed). Club admins see the average and comments
+for their events at the bottom of the Admin tab; platform admins also see
+feedback about the app.
+
 ## Website version
 
 Every push to `main` publishes the web version to GitHub Pages

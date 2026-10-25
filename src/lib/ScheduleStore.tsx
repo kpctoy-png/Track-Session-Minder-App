@@ -8,7 +8,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { SAMPLE_CLUBS, SAMPLE_EVENTS } from '@/data/sampleEvents';
-import type { Club, CoachingSession, EventDay, ScheduleItem, TrackEvent } from '@/data/types';
+import type { Club, CoachingSession, EventDay, Feedback, ScheduleItem, TrackEvent } from '@/data/types';
 import { normalizeEmail } from './coaching';
 import { todayISO } from './dates';
 import { sortItems } from './schedule';
@@ -48,6 +48,11 @@ interface ScheduleStore {
   /** Resolves to an error message, or null once saved. */
   addCoaching: (session: Omit<CoachingSession, 'id'>) => Promise<string | null>;
   removeCoaching: (id: string) => Promise<string | null>;
+  /** Resolves to an error message, or null once sent. */
+  sendFeedback: (feedback: Pick<Feedback, 'eventId' | 'rating' | 'comment' | 'name'>) => Promise<string | null>;
+  /** Feedback about one event, or about the app when eventId is null. Admins only. */
+  loadFeedback: (eventId: string | null) => Promise<Feedback[]>;
+  isPlatformAdmin: boolean;
   /** Signed-in admin; always null when there is no database. */
   session: Session | null;
   /** Clubs whose events the signed-in admin may change. */
@@ -157,6 +162,8 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   const [previewOffset, setPreviewOffset] = useState(0);
   const [coaching, setCoaching] = useState<CoachingSession[]>([]);
   const [practiceEmail, setPracticeEmail] = useState<string | null>(null);
+  // Without a database, feedback stays on this device.
+  const [practiceFeedback, setPracticeFeedback] = useState<Feedback[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -346,6 +353,39 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         setCoaching((all) => (all.some((c) => c.id === saved.id) ? all : [...all, saved]));
         return null;
       },
+      sendFeedback: async ({ eventId, rating, comment, name }) => {
+        const email = session?.user.email ? normalizeEmail(session.user.email) : undefined;
+        if (!supabase) {
+          const entry = { id: `practice-${Date.now()}`, eventId, rating, comment, name, email, createdAt: new Date().toISOString() };
+          setPracticeFeedback((all) => [entry, ...all]);
+          return null;
+        }
+        // No .select() here: drivers may write feedback but not read it back.
+        const { error } = await supabase.from('feedback').insert({
+          event_id: eventId ?? null,
+          rating,
+          comment: comment || null,
+          name: name || null,
+          email: email ?? null,
+        });
+        return error ? error.message : null;
+      },
+      loadFeedback: async (eventId) => {
+        if (!supabase) return practiceFeedback.filter((f) => (f.eventId ?? null) === eventId);
+        const query = supabase.from('feedback').select('*').order('created_at', { ascending: false });
+        const { data, error } = await (eventId ? query.eq('event_id', eventId) : query.is('event_id', null));
+        if (error) throw error;
+        return (data ?? []).map((f) => ({
+          id: f.id,
+          eventId: f.event_id ?? undefined,
+          rating: f.rating,
+          comment: f.comment ?? undefined,
+          name: f.name ?? undefined,
+          email: f.email ?? undefined,
+          createdAt: f.created_at,
+        }));
+      },
+      isPlatformAdmin: rights.all,
       removeCoaching: async (id) => {
         if (supabase) {
           const { data, error } = await supabase.from('coaching_sessions').delete().eq('id', id).select('id');
@@ -365,7 +405,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         resetPreview: () => setPreviewOffset(0),
       },
     };
-  }, [clubs, events, event, day, isLive, now, previewOffset, sync, session, rights, coaching, practiceEmail]);
+  }, [clubs, events, event, day, isLive, now, previewOffset, sync, session, rights, coaching, practiceEmail, practiceFeedback]);
 
   if (!store) return <LoadingOrError status={sync.status} message={sync.message} />;
   return <Context.Provider value={store}>{children}</Context.Provider>;

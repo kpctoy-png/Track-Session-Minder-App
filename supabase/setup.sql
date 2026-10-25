@@ -150,6 +150,34 @@ drop policy if exists "Club admins manage coaching" on coaching_sessions;
 create policy "Club admins manage coaching" on coaching_sessions for all to authenticated
   using (can_manage_club(club_of_day(day_id))) with check (can_manage_club(club_of_day(day_id)));
 
+-- Star ratings and comments from drivers. event_id null means feedback about
+-- the app itself, which only platform admins read.
+create table if not exists feedback (
+  id uuid primary key default gen_random_uuid(),
+  event_id text references events (id) on delete cascade,
+  rating int not null check (rating between 1 and 5),
+  comment text check (char_length(comment) <= 2000),
+  name text check (char_length(name) <= 100),
+  email text,
+  created_at timestamptz not null default now()
+);
+
+alter table feedback enable row level security;
+
+-- Anyone can leave feedback. A signed-in driver's email is attached, and it
+-- must be their own, so nobody can post under someone else's address.
+drop policy if exists "Anyone can leave feedback" on feedback;
+create policy "Anyone can leave feedback" on feedback for insert to anon, authenticated
+  with check (email is null or email = lower(auth.jwt() ->> 'email'));
+drop policy if exists "Admins read feedback" on feedback;
+create policy "Admins read feedback" on feedback for select to authenticated
+  using (case when event_id is null then is_platform_admin()
+              else can_manage_club((select club_id from events where events.id = event_id)) end);
+drop policy if exists "Admins remove feedback" on feedback;
+create policy "Admins remove feedback" on feedback for delete to authenticated
+  using (case when event_id is null then is_platform_admin()
+              else can_manage_club((select club_id from events where events.id = event_id)) end);
+
 -- Send changes to phones as they happen.
 do $$
 begin

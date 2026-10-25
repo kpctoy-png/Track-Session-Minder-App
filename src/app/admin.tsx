@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { CoachingAdmin } from '@/components/CoachingAdmin';
 import { EventPicker } from '@/components/EventPicker';
+import { FeedbackAdmin } from '@/components/FeedbackAdmin';
 import { ItemRow } from '@/components/ItemRow';
 import { NewEventForm } from '@/components/NewEventForm';
 import { SheetImportForm } from '@/components/SheetImportForm';
@@ -15,7 +16,7 @@ import { formatTime, fromMinutes, shiftSchedule, sortItems, toMinutes } from '@/
 import { supabase } from '@/lib/supabase';
 
 export default function AdminScreen() {
-  const { clubs, event, day, clock, updateDay, deleteEvent, session, sync, hasEvents, manageableClubs, canManage } = useSchedule();
+  const { clubs, event, day, clock, updateDay, deleteEvent, session, sync, hasEvents, manageableClubs, canManage, isPlatformAdmin } = useSchedule();
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -133,6 +134,7 @@ export default function AdminScreen() {
           ))}
 
           <CoachingAdmin />
+          <FeedbackAdmin eventId={event.id} title={`Feedback on ${event.name}`} />
         </>
       ) : (
         <Text style={styles.sub}>
@@ -145,6 +147,7 @@ export default function AdminScreen() {
               : 'This account is not an organizer account, so it can view schedules but not change them.'}
         </Text>
       )}
+      {isPlatformAdmin ? <FeedbackAdmin eventId={null} title="Feedback on the app" /> : null}
     </ScrollView>
   );
 }
