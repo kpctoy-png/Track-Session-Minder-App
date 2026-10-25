@@ -4,14 +4,20 @@ import { useSchedule } from '@/lib/ScheduleStore';
 import { formatTime, fromMinutes } from '@/lib/schedule';
 import { colors } from './theme';
 
-// Shown when the selected day isn't today, so you can scrub through the day.
+// Shown when the selected day isn't today. The time keeps ticking like a real
+// clock, and the buttons move it so you can see any point of the day.
 export function PreviewClock() {
-  const { clock } = useSchedule();
+  const { day, clock } = useSchedule();
   if (!clock.isPreview) return null;
-  const step = (delta: number) => clock.setPreviewMinute(Math.max(6 * 60, Math.min(18 * 60, clock.minuteOfDay + delta)));
+  const step = (delta: number) => clock.setPreviewMinute(clock.minuteOfDay + delta);
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>Preview time</Text>
+      <Text style={styles.label}>
+        Preview of {day.label}, running at this time of day.{' '}
+        <Text style={styles.link} onPress={clock.resetPreview}>
+          Back to now
+        </Text>
+      </Text>
       <View style={styles.controls}>
         <Btn label="−15" onPress={() => step(-15)} />
         <Btn label="−5" onPress={() => step(-5)} />
@@ -42,6 +48,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   label: { color: colors.muted, fontSize: 12, textAlign: 'center', marginBottom: 6 },
+  link: { color: colors.accent, fontWeight: '600' },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   time: { color: colors.text, fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
   btn: { backgroundColor: colors.cardRaised, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },

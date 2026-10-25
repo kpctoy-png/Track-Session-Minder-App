@@ -16,9 +16,11 @@ import { supabase } from './supabase';
 interface Clock {
   minuteOfDay: number;
   seconds: number;
-  /** True when no event is running today, so we show a pretend time instead. */
+  /** True when the selected day isn't today. The preview keeps ticking with the real clock, shifted by the admin's scrubbing. */
   isPreview: boolean;
   setPreviewMinute: (minute: number) => void;
+  /** Puts the preview back on the real time of day. */
+  resetPreview: () => void;
 }
 
 export type SyncStatus = 'offline' | 'loading' | 'live' | 'error';
@@ -106,7 +108,8 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   const [now, setNow] = useState(() => new Date());
   const [eventId, setEventId] = useState<string | null>(null);
   const [dayId, setDayId] = useState<string | null>(null);
-  const [previewMinute, setPreviewMinute] = useState(9 * 60 + 20);
+  // How far the preview clock is moved from the real time of day, in minutes.
+  const [previewOffset, setPreviewOffset] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -179,6 +182,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
 
   const store = useMemo<ScheduleStore | null>(() => {
     if (!event || !day) return null;
+    const nowMinute = now.getHours() * 60 + now.getMinutes();
     return {
       clubs,
       events,
@@ -251,13 +255,14 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       manageableClubs: clubs.filter((c) => canManage(c.id)),
       canManage,
       clock: {
-        minuteOfDay: isLive ? now.getHours() * 60 + now.getMinutes() : previewMinute,
-        seconds: isLive ? now.getSeconds() : 0,
+        minuteOfDay: isLive ? nowMinute : (((nowMinute + previewOffset) % 1440) + 1440) % 1440,
+        seconds: now.getSeconds(),
         isPreview: !isLive,
-        setPreviewMinute,
+        setPreviewMinute: (minute) => setPreviewOffset(minute - nowMinute),
+        resetPreview: () => setPreviewOffset(0),
       },
     };
-  }, [clubs, events, event, day, isLive, now, previewMinute, sync, session, rights]);
+  }, [clubs, events, event, day, isLive, now, previewOffset, sync, session, rights]);
 
   if (!store) return <LoadingOrError status={sync.status} message={sync.message} />;
   return <Context.Provider value={store}>{children}</Context.Provider>;
