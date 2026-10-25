@@ -9,6 +9,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { SAMPLE_EVENTS } from '@/data/sampleEvents';
 import type { EventDay, ScheduleItem, TrackEvent } from '@/data/types';
+import { todayISO } from './dates';
 import { sortItems } from './schedule';
 import { supabase } from './supabase';
 
@@ -36,11 +37,6 @@ interface ScheduleStore {
 }
 
 const Context = createContext<ScheduleStore | null>(null);
-
-function todayISO(now: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
 
 function findToday(events: TrackEvent[], now: Date) {
   const today = todayISO(now);
