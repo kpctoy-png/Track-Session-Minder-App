@@ -7,8 +7,8 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { LoadingOrError } from '@/components/LoadingOrError';
-import { SAMPLE_EVENTS } from '@/data/sampleEvents';
-import type { EventDay, ScheduleItem, TrackEvent } from '@/data/types';
+import { SAMPLE_CLUBS, SAMPLE_EVENTS } from '@/data/sampleEvents';
+import type { Club, EventDay, ScheduleItem, TrackEvent } from '@/data/types';
 import { todayISO } from './dates';
 import { sortItems } from './schedule';
 import { supabase } from './supabase';
@@ -24,6 +24,7 @@ interface Clock {
 export type SyncStatus = 'offline' | 'loading' | 'live' | 'error';
 
 interface ScheduleStore {
+  clubs: Club[];
   events: TrackEvent[];
   event: TrackEvent;
   day: EventDay;
@@ -36,6 +37,9 @@ interface ScheduleStore {
   sync: { status: SyncStatus; message?: string };
   /** Signed-in admin; always null when there is no database. */
   session: Session | null;
+  /** Clubs whose events the signed-in admin may change. */
+  manageableClubs: Club[];
+  canManage: (clubId: string) => boolean;
   clock: Clock;
 }
 
@@ -62,16 +66,24 @@ function toDay(row: DayRow): EventDay {
   return { id: row.id, label: row.label, date: row.date, items: sortItems(row.items ?? []) };
 }
 
+async function fetchClubs(): Promise<Club[]> {
+  if (!supabase) return SAMPLE_CLUBS;
+  const { data, error } = await supabase.from('clubs').select('id, name, logo_url, website').order('name');
+  if (error) throw error;
+  return (data ?? []).map((c) => ({ id: c.id, name: c.name, logoUrl: c.logo_url ?? undefined, website: c.website ?? undefined }));
+}
+
 async function fetchEvents(): Promise<TrackEvent[]> {
   if (!supabase) return SAMPLE_EVENTS;
   const { data, error } = await supabase
     .from('events')
-    .select('id, name, track, location, sort, event_days (id, event_id, label, date, items)')
+    .select('id, club_id, name, track, location, sort, event_days (id, event_id, label, date, items)')
     .order('sort');
   if (error) throw error;
   return (data ?? [])
     .map((e) => ({
       id: e.id,
+      clubId: e.club_id,
       name: e.name,
       track: e.track,
       location: e.location,
@@ -85,7 +97,10 @@ function replaceDay(events: TrackEvent[], day: EventDay): TrackEvent[] {
 }
 
 export function ScheduleProvider({ children }: { children: ReactNode }) {
+  const [clubs, setClubs] = useState<Club[]>(supabase ? [] : SAMPLE_CLUBS);
   const [events, setEvents] = useState<TrackEvent[]>(supabase ? [] : SAMPLE_EVENTS);
+  // Without a database everything is practice mode, so every club is editable.
+  const [rights, setRights] = useState<{ all: boolean; clubIds: string[] }>({ all: !supabase, clubIds: [] });
   const [sync, setSync] = useState<ScheduleStore['sync']>({ status: supabase ? 'loading' : 'offline' });
   const [session, setSession] = useState<Session | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -104,9 +119,10 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     if (!client) return;
     let cancelled = false;
     const reload = () =>
-      fetchEvents()
-        .then((loaded) => {
+      Promise.all([fetchClubs(), fetchEvents()])
+        .then(([loadedClubs, loaded]) => {
           if (cancelled) return;
+          setClubs(loadedClubs);
           setEvents(loaded);
           setSync({ status: 'live' });
         })
@@ -122,6 +138,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'event_days' }, reload)
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'event_days' }, reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clubs' }, reload)
       .subscribe();
 
     client.auth.getSession().then(({ data }) => !cancelled && setSession(data.session));
@@ -134,6 +151,27 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Look up which clubs the signed-in admin may edit.
+  useEffect(() => {
+    const client = supabase;
+    const userId = session?.user.id;
+    if (!client) return;
+    if (!userId) return setRights({ all: false, clubIds: [] });
+    let cancelled = false;
+    Promise.all([
+      client.from('platform_admins').select('user_id').eq('user_id', userId),
+      client.from('club_admins').select('club_id').eq('user_id', userId),
+    ]).then(([platform, club]) => {
+      if (cancelled) return;
+      setRights({ all: !!platform.data?.length, clubIds: (club.data ?? []).map((r) => r.club_id as string) });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id]);
+
+  const canManage = (clubId: string) => rights.all || rights.clubIds.includes(clubId);
+
   const todays = events.length ? findToday(events, now) : null;
   const event = events.find((e) => e.id === eventId) ?? todays?.event ?? events[0];
   const day = event?.days.find((d) => d.id === dayId) ?? (todays?.event.id === event?.id ? todays?.day : undefined) ?? event?.days[0];
@@ -142,6 +180,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   const store = useMemo<ScheduleStore | null>(() => {
     if (!event || !day) return null;
     return {
+      clubs,
       events,
       event,
       day,
@@ -175,6 +214,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         if (supabase) {
           const { error } = await supabase.from('events').insert({
             id: newEvent.id,
+            club_id: newEvent.clubId,
             name: newEvent.name,
             track: newEvent.track,
             location: newEvent.location,
@@ -208,6 +248,8 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       },
       sync,
       session,
+      manageableClubs: clubs.filter((c) => canManage(c.id)),
+      canManage,
       clock: {
         minuteOfDay: isLive ? now.getHours() * 60 + now.getMinutes() : previewMinute,
         seconds: isLive ? now.getSeconds() : 0,
@@ -215,7 +257,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         setPreviewMinute,
       },
     };
-  }, [events, event, day, isLive, now, previewMinute, sync, session]);
+  }, [clubs, events, event, day, isLive, now, previewMinute, sync, session, rights]);
 
   if (!store) return <LoadingOrError status={sync.status} message={sync.message} />;
   return <Context.Provider value={store}>{children}</Context.Provider>;

@@ -26,8 +26,16 @@ export interface EventDay {
   items: ScheduleItem[];
 }
 
+export interface Club {
+  id: string;
+  name: string;
+  logoUrl?: string;
+  website?: string;
+}
+
 export interface TrackEvent {
   id: string;
+  clubId: string;
   name: string;
   track: string;
   location: string;

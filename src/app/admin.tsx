@@ -12,12 +12,14 @@ import { formatTime, fromMinutes, shiftSchedule, sortItems, toMinutes } from '@/
 import { supabase } from '@/lib/supabase';
 
 export default function AdminScreen() {
-  const { event, day, clock, updateDay, deleteEvent, session, sync } = useSchedule();
+  const { clubs, event, day, clock, updateDay, deleteEvent, session, sync, manageableClubs, canManage } = useSchedule();
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const items = sortItems(day.items);
+  const editable = canManage(event.clubId);
+  const clubName = clubs.find((c) => c.id === event.clubId)?.name ?? 'This club';
 
   if (supabase && !session) return <SignIn />;
   if (creating) return <NewEventForm onDone={() => setCreating(false)} />;
@@ -62,8 +64,8 @@ export default function AdminScreen() {
         </View>
       ) : null}
       <View style={styles.eventActions}>
-        <Btn label="+ New event" onPress={() => setCreating(true)} primary />
-        {confirmDelete ? (
+        {manageableClubs.length ? <Btn label="+ New event" onPress={() => setCreating(true)} primary /> : null}
+        {!editable ? null : confirmDelete ? (
           <>
             <Btn
               label={`Delete ${event.name}`}
@@ -84,32 +86,40 @@ export default function AdminScreen() {
       <EventPicker />
       <PreviewClock />
 
-      <Text style={styles.heading}>Running late?</Text>
-      <Text style={styles.sub}>Shifts everything after {formatTime(fromMinutes(clock.minuteOfDay))}.</Text>
-      <View style={styles.buttons}>
-        {[5, 10, 15, 30, 45, 60].map((m) => (
-          <Btn key={m} label={`+${m} min`} onPress={() => runLate(m)} primary />
-        ))}
-        <Btn label="−5 min" onPress={() => runLate(-5)} />
-      </View>
+      {editable ? (
+        <>
+          <Text style={styles.heading}>Running late?</Text>
+          <Text style={styles.sub}>Shifts everything after {formatTime(fromMinutes(clock.minuteOfDay))}.</Text>
+          <View style={styles.buttons}>
+            {[5, 10, 15, 30, 45, 60].map((m) => (
+              <Btn key={m} label={`+${m} min`} onPress={() => runLate(m)} primary />
+            ))}
+            <Btn label="−5 min" onPress={() => runLate(-5)} />
+          </View>
 
-      <Text style={[styles.heading, styles.sessionsHeading]}>Sessions</Text>
-      <Text style={styles.sub}>Tap a session to change its times.</Text>
+          <Text style={[styles.heading, styles.sessionsHeading]}>Sessions</Text>
+          <Text style={styles.sub}>Tap a session to change its times.</Text>
 
-      {items.map((item) => (
-        <View key={item.id}>
-          <Pressable onPress={() => setEditing(editing === item.id ? null : item.id)}>
-            <ItemRow item={item} />
-          </Pressable>
-          {editing === item.id ? (
-            <View style={styles.editor}>
-              <EditLine label="Start" onMinus={() => editItem(item.id, nudge('start', -5))} onPlus={() => editItem(item.id, nudge('start', 5))} />
-              <EditLine label="End" onMinus={() => editItem(item.id, nudge('end', -5))} onPlus={() => editItem(item.id, nudge('end', 5))} />
-              <Btn label="Remove session" onPress={() => editItem(item.id, () => null)} danger />
+          {items.map((item) => (
+            <View key={item.id}>
+              <Pressable onPress={() => setEditing(editing === item.id ? null : item.id)}>
+                <ItemRow item={item} />
+              </Pressable>
+              {editing === item.id ? (
+                <View style={styles.editor}>
+                  <EditLine label="Start" onMinus={() => editItem(item.id, nudge('start', -5))} onPlus={() => editItem(item.id, nudge('start', 5))} />
+                  <EditLine label="End" onMinus={() => editItem(item.id, nudge('end', -5))} onPlus={() => editItem(item.id, nudge('end', 5))} />
+                  <Btn label="Remove session" onPress={() => editItem(item.id, () => null)} danger />
+                </View>
+              ) : null}
             </View>
-          ) : null}
-        </View>
-      ))}
+          ))}
+        </>
+      ) : (
+        <Text style={styles.sub}>
+          {clubName} events can only be changed by {clubName} admins. Choose one of your own events to edit.
+        </Text>
+      )}
     </ScrollView>
   );
 }

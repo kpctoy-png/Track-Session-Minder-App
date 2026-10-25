@@ -16,7 +16,8 @@ const TRACKS = [
 ];
 
 export function NewEventForm({ onDone }: { onDone: () => void }) {
-  const { events, createEvent } = useSchedule();
+  const { events, manageableClubs, createEvent } = useSchedule();
+  const [clubId, setClubId] = useState(manageableClubs[0]?.id ?? '');
   const [name, setName] = useState('');
   const [track, setTrack] = useState('');
   const [location, setLocation] = useState('');
@@ -35,12 +36,13 @@ export function NewEventForm({ onDone }: { onDone: () => void }) {
   const dateOk = isValidDate(startDate);
 
   const save = async () => {
+    if (!clubId) return setError('Choose which club is running this event.');
     if (!name.trim() || !track.trim() || !location.trim()) return setError('Fill in the event name, track and location.');
     if (!dateOk) return setError('Enter the first day as year-month-day, like 2027-01-16.');
     setSaving(true);
     setError(null);
     const template = events.find((e) => e.id === templateId);
-    const problem = await createEvent(buildEvent({ name, track, location, startDate: startDate.trim(), dayCount, template }));
+    const problem = await createEvent(buildEvent({ clubId, name, track, location, startDate: startDate.trim(), dayCount, template }));
     setSaving(false);
     if (problem) return setError(problem);
     onDone();
@@ -54,6 +56,16 @@ export function NewEventForm({ onDone }: { onDone: () => void }) {
           <Text style={styles.cancel}>Cancel</Text>
         </Pressable>
       </View>
+      {manageableClubs.length > 1 ? (
+        <>
+          <Label text="Club" />
+          <View style={styles.chips}>
+            {manageableClubs.map((c) => (
+              <Chip key={c.id} label={c.name} selected={clubId === c.id} onPress={() => setClubId(c.id)} />
+            ))}
+          </View>
+        </>
+      ) : null}
       <Label text="Track" />
       <View style={styles.chips}>
         {TRACKS.map((t) => (
