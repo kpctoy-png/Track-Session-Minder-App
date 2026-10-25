@@ -8,9 +8,10 @@ export const RUN_GROUPS: Record<RunGroupId, { name: string; short: string; color
   ladies: { name: 'Ladies Only', short: 'Ladies', color: '#C9A7F5' },
 };
 
+// Meetings, breaks and parade laps get no color; the transparent bar keeps titles lined up.
 export const KIND_COLORS = {
   classroom: '#FFD60A',
-  meeting: '#B8B8C0',
-  break: '#8E8E93',
-  parade: '#64D2FF',
+  meeting: 'transparent',
+  break: 'transparent',
+  parade: 'transparent',
 } as const;
