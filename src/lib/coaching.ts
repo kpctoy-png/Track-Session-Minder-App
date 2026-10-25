@@ -9,3 +9,18 @@ export function coachingTimes(session: CoachingSession, day: EventDay | undefine
   const item = session.itemId ? day?.items.find((i) => i.id === session.itemId) : undefined;
   return item ? { start: item.start, end: item.end } : { start: session.start, end: session.end };
 }
+
+/** Sessions the signed-in person takes part in, as the student or as the coach. */
+export function sessionsFor(coaching: CoachingSession[], email: string | null): CoachingSession[] {
+  return email ? coaching.filter((c) => c.studentEmail === email || isCoachOf(c, email)) : [];
+}
+
+/** True when this person gives the session rather than takes it. */
+export const isCoachOf = (session: CoachingSession, email: string | null) =>
+  !!email && session.studentEmail !== email && session.coachEmail?.toLowerCase() === email;
+
+/** "With Dave" for the student, "Coaching sam@example.com" for the coach. */
+export function coachingTitle(session: CoachingSession, email: string | null): string {
+  if (isCoachOf(session, email)) return `Coaching ${session.studentEmail}`;
+  return session.coach ? `With ${session.coach}` : 'Coaching session';
+}

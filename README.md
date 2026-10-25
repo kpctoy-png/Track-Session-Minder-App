@@ -37,7 +37,8 @@ Without `.env`, the app runs on the built-in sample events in practice mode.
 Admins book a paid coaching session for one student by email (Admin tab →
 Coaching). The student signs in on the Me tab with a one-time code emailed to
 them, then sees the session on Me, on Now (with a countdown) and on Schedule.
-Only that student and the club's admins can see it. A session is linked to a
+If the coach's email is entered, the coach sees it too after signing in with that email.
+Only that student, the coach and the club's admins can see it. A session is linked to a
 schedule item, so "running late" shifts move it too.
 
 Driver sign-in needs three settings in Supabase:
@@ -51,8 +52,9 @@ Driver sign-in needs three settings in Supabase:
 
 ### Coaching emails
 
-When a coaching session is booked, changed or removed, the student (and the
-coach, if their email was entered) get an email. It is sent by the Supabase
+When a coaching session is booked, changed or removed, the student and the
+coach (if their email was entered) each get their own email, telling them to
+sign in with their own address. It is sent by the Supabase
 Edge Function in `supabase/functions/notify-coaching`, using the same Google
 account as the sign-in emails. One-time setup in the Supabase dashboard:
 

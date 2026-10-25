@@ -1,4 +1,4 @@
-// Emails the student (and the coach, if given) when a coaching session is
+// Emails the student (and, separately, the coach if given) when a coaching session is
 // booked, changed or removed. A trigger on coaching_sessions (supabase/schema.sql)
 // calls this function; see README "Coaching emails" for the setup.
 //
@@ -83,26 +83,44 @@ Deno.serve(async (req) => {
   const c = record ?? old_record;
   if (!c) return new Response('nothing to do');
 
-  const recipients = [c.student_email, c.coach_email].filter((e): e is string => !!e);
   const d = await describe(c);
   // The whole event was deleted (its days and bookings go with it), so there's nothing meaningful to say.
   if (!d) return new Response('event gone');
   const coach = c.coach ? escape(c.coach) : 'your coach';
+  const student = escape(c.student_email);
   const where = `<b>${escape(d.event)}</b>${d.track ? ` at ${escape(d.track)}` : ''}`;
+  const when = `<b>${escape(d.date)}, ${d.time}</b>`;
+  const notes = c.notes ? [`Note: ${escape(c.notes)}`] : [];
+  const signIn = (email: string) =>
+    `Sign in on the app's <b>Me</b> tab with ${escape(email)} to see it on your schedule, with a countdown. If the day runs late, the app shows the new time.`;
+  const heading = type === 'UPDATE' ? 'Coaching updated' : 'Coaching booked';
+  const subject = `${heading}: ${d.event}, ${d.date} at ${d.time.split(' – ')[0]}`;
 
+  // The student and the coach each get their own email, so neither sees the other's address
+  // and each is told to sign in with their own.
   if (type === 'DELETE') {
-    await send(recipients, `Coaching cancelled: ${d.event}, ${d.date}`, [
-      `The coaching session with ${coach} on ${escape(d.date)}, ${d.time}, at ${where} has been cancelled.`,
+    await send([c.student_email], `Coaching cancelled: ${d.event}, ${d.date}`, [
+      `Your coaching session with ${coach} on ${escape(d.date)}, ${d.time}, at ${where} has been cancelled.`,
       'Questions? Reply to this email.',
     ]);
+    if (c.coach_email)
+      await send([c.coach_email], `Coaching cancelled: ${d.event}, ${d.date}`, [
+        `Your coaching session with ${student} on ${escape(d.date)}, ${d.time}, at ${where} has been cancelled.`,
+      ]);
   } else {
-    const changed = type === 'UPDATE';
-    await send(recipients, `${changed ? 'Coaching updated' : 'Coaching booked'}: ${d.event}, ${d.date} at ${d.time.split(' – ')[0]}`, [
-      `${changed ? 'Your coaching session has changed.' : 'You have a coaching session booked.'}`,
-      `<b>${escape(d.date)}, ${d.time}</b> with ${coach}<br>${where}`,
-      ...(c.notes ? [`Note: ${escape(c.notes)}`] : []),
-      `Sign in on the app's <b>Me</b> tab with ${escape(c.student_email)} to see it on your schedule, with a countdown. If the day runs late, the app shows the new time.`,
+    await send([c.student_email], subject, [
+      type === 'UPDATE' ? 'Your coaching session has changed.' : 'You have a coaching session booked.',
+      `${when} with ${coach}<br>${where}`,
+      ...notes,
+      signIn(c.student_email),
     ]);
+    if (c.coach_email)
+      await send([c.coach_email], subject, [
+        type === 'UPDATE' ? 'A coaching session you are giving has changed.' : 'You have been booked to coach a student.',
+        `${when} with ${student}<br>${where}`,
+        ...notes,
+        signIn(c.coach_email),
+      ]);
   }
   return new Response('sent');
 });

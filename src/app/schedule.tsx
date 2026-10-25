@@ -5,6 +5,7 @@ import { ItemRow } from '@/components/ItemRow';
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { PreviewClock } from '@/components/PreviewClock';
 import { colors } from '@/components/theme';
+import { isCoachOf, sessionsFor } from '@/lib/coaching';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { sortItems, toMinutes } from '@/lib/schedule';
 
@@ -12,7 +13,12 @@ export default function ScheduleScreen() {
   const { day, clock, hasEvents, coaching, myEmail } = useSchedule();
   if (!hasEvents) return <LoadingOrError status="live" />;
   const now = clock.minuteOfDay;
-  const coachedItems = new Set(coaching.filter((c) => c.dayId === day.id && c.studentEmail === myEmail).map((c) => c.itemId));
+  // Item id -> badge, for sessions this person takes ("YOUR COACHING") or gives ("YOU'RE COACHING").
+  const badges = new Map(
+    sessionsFor(coaching, myEmail)
+      .filter((c) => c.dayId === day.id)
+      .map((c) => [c.itemId, isCoachOf(c, myEmail) ? "YOU'RE COACHING" : 'YOUR COACHING']),
+  );
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -26,7 +32,7 @@ export default function ScheduleScreen() {
             key={item.id}
             item={item}
             status={status}
-            right={coachedItems.has(item.id) ? <Text style={styles.coaching}>YOUR COACHING</Text> : undefined}
+            right={badges.has(item.id) ? <Text style={styles.coaching}>{badges.get(item.id)}</Text> : undefined}
           />
         );
       })}

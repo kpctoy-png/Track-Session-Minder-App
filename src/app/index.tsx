@@ -5,7 +5,7 @@ import { LoadingOrError } from '@/components/LoadingOrError';
 import { PreviewClock } from '@/components/PreviewClock';
 import { colors, itemColors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
-import { coachingTimes } from '@/lib/coaching';
+import { coachingTimes, coachingTitle, sessionsFor } from '@/lib/coaching';
 import { shortDate, todayISO } from '@/lib/dates';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { countdown, formatRange, formatTime, fromMinutes, getNowState, toMinutes } from '@/lib/schedule';
@@ -14,7 +14,7 @@ export default function NowScreen() {
   const { events, day, clock, hasEvents, coaching, myEmail, selectEvent, selectDay } = useSchedule();
   if (!hasEvents) return <LoadingOrError status="live" />;
   const state = getNowState(day, clock.minuteOfDay);
-  const mine = coaching.filter((c) => c.studentEmail === myEmail);
+  const mine = sessionsFor(coaching, myEmail);
   // The student's coaching on the day shown. On the day itself, finished sessions drop off; in a preview,
   // every session that day stays, since the preview clock is only a stand-in.
   const myCoaching = mine
@@ -43,7 +43,7 @@ export default function NowScreen() {
       {myCoaching ? (
         <Card
           label="Your coaching session"
-          title={myCoaching.session.coach ? `With ${myCoaching.session.coach}` : 'Coaching session'}
+          title={coachingTitle(myCoaching.session, myEmail)}
           time={formatRange(myCoaching)}
           subtitle={
             toMinutes(myCoaching.end) <= clock.minuteOfDay
@@ -64,7 +64,7 @@ export default function NowScreen() {
         >
           <Card
             label="Your next coaching session"
-            title={nextElsewhere.session.coach ? `With ${nextElsewhere.session.coach}` : 'Coaching session'}
+            title={coachingTitle(nextElsewhere.session, myEmail)}
             time={`${nextElsewhere.event.name} · ${nextElsewhere.day.label} ${shortDate(nextElsewhere.day.date)} · ${formatTime(nextElsewhere.start)}`}
             subtitle="Tap to see that day"
             highlight
