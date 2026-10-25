@@ -13,14 +13,14 @@ import { formatTime, fromMinutes, shiftSchedule, sortItems, toMinutes } from '@/
 import { supabase } from '@/lib/supabase';
 
 export default function AdminScreen() {
-  const { clubs, event, day, clock, updateDay, deleteEvent, session, sync, manageableClubs, canManage } = useSchedule();
+  const { clubs, event, day, clock, updateDay, deleteEvent, session, sync, hasEvents, manageableClubs, canManage } = useSchedule();
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const items = sortItems(day.items);
-  const editable = canManage(event.clubId);
+  const editable = hasEvents && canManage(event.clubId);
   const clubName = clubs.find((c) => c.id === event.clubId)?.name ?? 'This club';
 
   if (supabase && !session) return <SignIn />;
@@ -87,8 +87,8 @@ export default function AdminScreen() {
         )}
       </View>
       {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
-      <EventPicker />
-      <PreviewClock />
+      {hasEvents ? <EventPicker /> : null}
+      {hasEvents ? <PreviewClock /> : null}
 
       {editable ? (
         <>
@@ -121,7 +121,11 @@ export default function AdminScreen() {
         </>
       ) : (
         <Text style={styles.sub}>
-          {clubName} events can only be changed by {clubName} admins. Choose one of your own events to edit.
+          {!hasEvents
+            ? manageableClubs.length
+              ? 'There are no events yet. Tap + New event to add one.'
+              : 'There are no events yet, and this account is not an organizer account.'
+            : `${clubName} events can only be changed by ${clubName} admins. Choose one of your own events to edit.`}
         </Text>
       )}
     </ScrollView>

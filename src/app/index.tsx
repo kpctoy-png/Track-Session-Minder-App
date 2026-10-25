@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EventPicker } from '@/components/EventPicker';
+import { LoadingOrError } from '@/components/LoadingOrError';
 import { PreviewClock } from '@/components/PreviewClock';
 import { colors, itemColors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
@@ -8,7 +9,8 @@ import { useSchedule } from '@/lib/ScheduleStore';
 import { countdown, formatRange, formatTime, fromMinutes, getNowState } from '@/lib/schedule';
 
 export default function NowScreen() {
-  const { day, clock } = useSchedule();
+  const { day, clock, hasEvents } = useSchedule();
+  if (!hasEvents) return <LoadingOrError status="live" />;
   const state = getNowState(day, clock.minuteOfDay);
 
   return (

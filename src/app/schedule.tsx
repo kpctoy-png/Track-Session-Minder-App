@@ -2,13 +2,15 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { EventPicker } from '@/components/EventPicker';
 import { ItemRow } from '@/components/ItemRow';
+import { LoadingOrError } from '@/components/LoadingOrError';
 import { PreviewClock } from '@/components/PreviewClock';
 import { colors } from '@/components/theme';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { sortItems, toMinutes } from '@/lib/schedule';
 
 export default function ScheduleScreen() {
-  const { day, clock } = useSchedule();
+  const { day, clock, hasEvents } = useSchedule();
+  if (!hasEvents) return <LoadingOrError status="live" />;
   const now = clock.minuteOfDay;
 
   return (
