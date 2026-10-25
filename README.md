@@ -26,8 +26,11 @@ has copy-and-paste SQL for adding clubs and admins. Club logos live in
 
 1. Run `supabase/setup.sql` in the Supabase SQL Editor (again after updates that change it; it only adds what's missing).
    The first run makes the accounts that already exist platform admins.
-2. Add admins under Authentication → Users. Being signed in gives no editing
-   rights by itself: only people listed in `platform_admins` or `club_admins` can edit.
+2. Add club organizers in the app: platform admins see **Manage organizers** at the
+   bottom of the Admin tab (email + club, stored in `club_organizers`). Organizers
+   sign in at `/admin` with an emailed code. Accounts made under Authentication → Users
+   with a password still work too. Being signed in gives no editing rights by itself:
+   only people listed in `platform_admins`, `club_admins` or `club_organizers` can edit.
 3. Put the project URL and publishable key in `.env`:
    `EXPO_PUBLIC_SUPABASE_URL=...` and `EXPO_PUBLIC_SUPABASE_KEY=...`
 

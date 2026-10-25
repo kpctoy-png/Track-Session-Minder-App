@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CoachingAdmin } from '@/components/CoachingAdmin';
+import { EmailCodeSignIn } from '@/components/EmailCodeSignIn';
 import { EventPicker } from '@/components/EventPicker';
 import { FeedbackAdmin } from '@/components/FeedbackAdmin';
 import { ItemRow } from '@/components/ItemRow';
+import { ManageOrganizers } from '@/components/ManageOrganizers';
 import { NewEventForm } from '@/components/NewEventForm';
 import { SheetImportForm } from '@/components/SheetImportForm';
 import { PreviewClock } from '@/components/PreviewClock';
@@ -148,11 +150,33 @@ export default function AdminScreen() {
         </Text>
       )}
       {isPlatformAdmin ? <FeedbackAdmin eventId={null} title="Feedback on the app" /> : null}
+      {isPlatformAdmin && supabase ? <ManageOrganizers /> : null}
     </ScrollView>
   );
 }
 
+/** Organizers sign in with an emailed code; the password form is still there for accounts made in Supabase. */
 function SignIn() {
+  const [usePassword, setUsePassword] = useState(false);
+  if (!usePassword)
+    return (
+      <View style={styles.page}>
+        <EmailCodeSignIn
+          heading="Admin sign in"
+          intro="For event organizers. Enter your email and we'll send you a code, no password needed."
+          emailHint="Enter the email Redline added you with."
+          idPrefix="admin"
+        >
+          <Pressable onPress={() => setUsePassword(true)}>
+            <Text style={styles.link}>Sign in with a password instead</Text>
+          </Pressable>
+        </EmailCodeSignIn>
+      </View>
+    );
+  return <PasswordSignIn onUseCode={() => setUsePassword(false)} />;
+}
+
+function PasswordSignIn({ onUseCode }: { onUseCode: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -195,6 +219,9 @@ function SignIn() {
       />
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       <Btn label={busy ? 'Signing in…' : 'Sign in'} onPress={signIn} primary />
+      <Pressable onPress={onUseCode}>
+        <Text style={styles.link}>Email me a code instead</Text>
+      </Pressable>
     </View>
   );
 }
@@ -219,6 +246,7 @@ function Btn({ label, onPress, primary, danger }: { label: string; onPress: () =
 
 const styles = StyleSheet.create({
   page: { padding: 16, paddingBottom: 40 },
+  link: { color: colors.accent, fontWeight: '600', marginTop: 14 },
   notice: { backgroundColor: '#2A2210', borderRadius: 12, padding: 12, marginBottom: 12 },
   noticeText: { color: '#FFD60A', fontSize: 13 },
   heading: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 8 },
