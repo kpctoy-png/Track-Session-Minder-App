@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { DriverGuide } from '@/components/DriverGuide';
 import { FeedbackForm } from '@/components/FeedbackForm';
 import { colors } from '@/components/theme';
 import { bookingName, coachingTimes, coachingTitle, isCoachOf, isEmail, sessionsFor } from '@/lib/coaching';
@@ -14,25 +15,33 @@ export default function MeScreen() {
   const { events, coaching, myEmail, setPracticeEmail, selectEvent, selectDay } = useSchedule();
   const router = useRouter();
   const [givingFeedback, setGivingFeedback] = useState(false);
+  const [readingGuide, setReadingGuide] = useState(false);
 
   if (givingFeedback) return <FeedbackForm onDone={() => setGivingFeedback(false)} />;
-  const feedbackButton = (
-    <Pressable onPress={() => setGivingFeedback(true)} style={styles.feedback}>
-      <Text style={styles.feedbackStars}>★★★★★</Text>
-      <Text style={styles.feedbackText}>Rate an event or the app</Text>
-    </Pressable>
+  if (readingGuide) return <DriverGuide onDone={() => setReadingGuide(false)} />;
+  const topButtons = (
+    <>
+      <Pressable onPress={() => setReadingGuide(true)} style={styles.feedback}>
+        <Text style={styles.feedbackStars}>?</Text>
+        <Text style={styles.feedbackText}>How to use the app</Text>
+      </Pressable>
+      <Pressable onPress={() => setGivingFeedback(true)} style={styles.feedback}>
+        <Text style={styles.feedbackStars}>★★★★★</Text>
+        <Text style={styles.feedbackText}>Rate an event or the app</Text>
+      </Pressable>
+    </>
   );
   if (supabase && !myEmail)
     return (
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        {feedbackButton}
+        {topButtons}
         <EmailCodeSignIn />
       </ScrollView>
     );
   if (!supabase && !myEmail)
     return (
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        {feedbackButton}
+        {topButtons}
         <PracticeSignIn onSubmit={setPracticeEmail} />
       </ScrollView>
     );
@@ -51,7 +60,7 @@ export default function MeScreen() {
         <Text style={styles.signedInText}>Signed in as {myEmail}</Text>
         <Btn label="Sign out" onPress={() => (supabase ? supabase.auth.signOut() : setPracticeEmail(null))} />
       </View>
-      {feedbackButton}
+      {topButtons}
 
       <Text style={styles.heading}>Your coaching and check rides</Text>
       {mine.length ? (
