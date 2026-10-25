@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { EventPicker } from '@/components/EventPicker';
 import { ItemRow } from '@/components/ItemRow';
@@ -8,11 +8,14 @@ import { colors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { formatTime, fromMinutes, shiftSchedule, sortItems, toMinutes } from '@/lib/schedule';
+import { supabase } from '@/lib/supabase';
 
 export default function AdminScreen() {
-  const { day, clock, updateDay, resetDay } = useSchedule();
+  const { day, clock, updateDay, session, sync } = useSchedule();
   const [editing, setEditing] = useState<string | null>(null);
   const items = sortItems(day.items);
+
+  if (supabase && !session) return <SignIn />;
 
   const runLate = (minutes: number) => updateDay(day.id, shiftSchedule(items, clock.minuteOfDay, minutes));
 
@@ -35,12 +38,24 @@ export default function AdminScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      <View style={styles.notice}>
-        <Text style={styles.noticeText}>
-          Practice mode: changes here only show on this device. Once the online database is connected, they will
-          update every driver's phone.
-        </Text>
-      </View>
+      {supabase ? (
+        <View style={styles.signedIn}>
+          <Text style={styles.signedInText}>Changes go live to every driver. Signed in as {session?.user.email}</Text>
+          <Btn label="Sign out" onPress={() => supabase?.auth.signOut()} />
+        </View>
+      ) : (
+        <View style={styles.notice}>
+          <Text style={styles.noticeText}>
+            Practice mode: changes here only show on this device. Once the online database is connected, they will
+            update every driver's phone.
+          </Text>
+        </View>
+      )}
+      {sync.status === 'error' ? (
+        <View style={styles.error}>
+          <Text style={styles.errorText}>{sync.message}</Text>
+        </View>
+      ) : null}
       <EventPicker />
       <PreviewClock />
 
@@ -53,10 +68,7 @@ export default function AdminScreen() {
         <Btn label="−5 min" onPress={() => runLate(-5)} />
       </View>
 
-      <View style={styles.headerRow}>
-        <Text style={styles.heading}>Sessions</Text>
-        <Btn label="Reset day" onPress={() => resetDay(day.id)} />
-      </View>
+      <Text style={[styles.heading, styles.sessionsHeading]}>Sessions</Text>
       <Text style={styles.sub}>Tap a session to change its times.</Text>
 
       {items.map((item) => (
@@ -74,6 +86,53 @@ export default function AdminScreen() {
         </View>
       ))}
     </ScrollView>
+  );
+}
+
+function SignIn() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const signIn = async () => {
+    if (!supabase) return;
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setBusy(false);
+    if (error) setError('That email and password did not match an admin account.');
+  };
+
+  return (
+    <View style={styles.page}>
+      <Text style={styles.heading}>Admin sign in</Text>
+      <Text style={styles.sub}>Only event organizers can change the schedule.</Text>
+      <TextInput
+        id="admin-email"
+        style={styles.input}
+        placeholder="Email"
+        placeholderTextColor={colors.muted}
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
+      />
+      <TextInput
+        id="admin-password"
+        style={styles.input}
+        placeholder="Password"
+        placeholderTextColor={colors.muted}
+        secureTextEntry
+        autoComplete="password"
+        value={password}
+        onChangeText={setPassword}
+        onSubmitEditing={signIn}
+      />
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      <Btn label={busy ? 'Signing in…' : 'Sign in'} onPress={signIn} primary />
+    </View>
   );
 }
 
@@ -101,7 +160,12 @@ const styles = StyleSheet.create({
   noticeText: { color: '#FFD60A', fontSize: 13 },
   heading: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 8 },
   sub: { color: colors.muted, fontSize: 13, marginTop: 2, marginBottom: 10 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
+  sessionsHeading: { marginTop: 24 },
+  signedIn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#10261A', borderRadius: 12, padding: 12, marginBottom: 12 },
+  signedInText: { color: '#34C759', fontSize: 13, flex: 1 },
+  error: { backgroundColor: '#2A1212', borderRadius: 12, padding: 12, marginBottom: 12 },
+  errorText: { color: '#FF6961', fontSize: 13, marginBottom: 8 },
+  input: { backgroundColor: colors.card, color: colors.text, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 12, fontSize: 16, marginBottom: 10 },
   buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   editor: { backgroundColor: colors.cardRaised, borderRadius: 12, padding: 12, marginBottom: 10, marginTop: -2, gap: 8 },
   editLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
