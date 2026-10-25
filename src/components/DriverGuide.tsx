@@ -58,7 +58,7 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
         <Body>
           If you've booked a coaching session or check ride, you'll get an email. To see it in the app, open the My Day tab,
           enter that same email, and type the code we email you (no password). Your booking then shows on Now with a
-          countdown, on Schedule with a badge, and on Me. If the day runs late, its time moves too.
+          countdown, on Schedule with a badge, and on My Day. If the day runs late, its time moves too.
         </Body>
       </Section>
 
