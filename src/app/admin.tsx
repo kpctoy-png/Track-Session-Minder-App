@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { EventPicker } from '@/components/EventPicker';
 import { ItemRow } from '@/components/ItemRow';
 import { NewEventForm } from '@/components/NewEventForm';
+import { SheetImportForm } from '@/components/SheetImportForm';
 import { PreviewClock } from '@/components/PreviewClock';
 import { colors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
@@ -15,6 +16,7 @@ export default function AdminScreen() {
   const { clubs, event, day, clock, updateDay, deleteEvent, session, sync, manageableClubs, canManage } = useSchedule();
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const items = sortItems(day.items);
@@ -23,6 +25,7 @@ export default function AdminScreen() {
 
   if (supabase && !session) return <SignIn />;
   if (creating) return <NewEventForm onDone={() => setCreating(false)} />;
+  if (importing) return <SheetImportForm onDone={() => setImporting(false)} />;
 
   const runLate = (minutes: number) => updateDay(day.id, shiftSchedule(items, clock.minuteOfDay, minutes));
 
@@ -65,6 +68,7 @@ export default function AdminScreen() {
       ) : null}
       <View style={styles.eventActions}>
         {manageableClubs.length ? <Btn label="+ New event" onPress={() => setCreating(true)} primary /> : null}
+        {editable ? <Btn label="Import from Google Sheet" onPress={() => setImporting(true)} /> : null}
         {!editable ? null : confirmDelete ? (
           <>
             <Btn
