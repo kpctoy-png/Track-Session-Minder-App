@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { FeedbackForm } from '@/components/FeedbackForm';
 import { colors } from '@/components/theme';
-import { coachingTimes, isEmail } from '@/lib/coaching';
+import { coachingTimes, coachingTitle, isCoachOf, isEmail, sessionsFor } from '@/lib/coaching';
 import { shortDate } from '@/lib/dates';
 import { formatRange } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
@@ -37,8 +37,7 @@ export default function MeScreen() {
       </ScrollView>
     );
 
-  const mine = coaching
-    .filter((c) => c.studentEmail === myEmail)
+  const mine = sessionsFor(coaching, myEmail)
     .flatMap((session) => {
       const event = events.find((e) => e.days.some((d) => d.id === session.dayId));
       const day = event?.days.find((d) => d.id === session.dayId);
@@ -69,14 +68,16 @@ export default function MeScreen() {
             <Text style={styles.cardLabel}>
               {event.name.toUpperCase()} · {day.label.toUpperCase()} {shortDate(day.date).toUpperCase()}
             </Text>
-            <Text style={styles.cardTitle}>{session.coach ? `Coaching with ${session.coach}` : 'Coaching session'}</Text>
+            <Text style={styles.cardTitle}>
+              {isCoachOf(session, myEmail) ? coachingTitle(session, myEmail) : session.coach ? `Coaching with ${session.coach}` : 'Coaching session'}
+            </Text>
             <Text style={styles.cardTime}>{formatRange({ start, end })}</Text>
             {session.notes ? <Text style={styles.cardNotes}>{session.notes}</Text> : null}
           </Pressable>
         ))
       ) : (
         <Text style={styles.sub}>
-          No coaching sessions yet. When an organizer books one for {myEmail}, it shows up here and on the Now tab.
+          No coaching sessions yet. When an organizer books one for {myEmail}, as student or coach, it shows up here and on the Now tab.
         </Text>
       )}
     </ScrollView>

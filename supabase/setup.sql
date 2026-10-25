@@ -140,15 +140,19 @@ create or replace function club_of_day(day text) returns text
   select events.club_id from event_days join events on events.id = event_days.event_id where event_days.id = day;
 $$;
 
--- Optional: the coach gets a copy of the booking email.
+-- Optional: the coach gets their own booking email and sees the session after signing in.
 alter table coaching_sessions add column if not exists coach_email text;
 
 alter table coaching_sessions enable row level security;
 
--- Students see only their own sessions; club admins see and manage their club's.
+-- Students and coaches see only their own sessions; club admins see and manage their club's.
 drop policy if exists "Students and club admins read coaching" on coaching_sessions;
 create policy "Students and club admins read coaching" on coaching_sessions for select to authenticated
-  using (student_email = lower(auth.jwt() ->> 'email') or can_manage_club(club_of_day(day_id)));
+  using (
+    student_email = lower(auth.jwt() ->> 'email')
+    or lower(coach_email) = lower(auth.jwt() ->> 'email')
+    or can_manage_club(club_of_day(day_id))
+  );
 drop policy if exists "Club admins manage coaching" on coaching_sessions;
 create policy "Club admins manage coaching" on coaching_sessions for all to authenticated
   using (can_manage_club(club_of_day(day_id))) with check (can_manage_club(club_of_day(day_id)));
