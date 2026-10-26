@@ -14,7 +14,7 @@ import { PreviewClock } from '@/components/PreviewClock';
 import { colors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
 import { useSchedule } from '@/lib/ScheduleStore';
-import { formatTime, fromMinutes, shiftSchedule, sortItems, toMinutes } from '@/lib/schedule';
+import { formatTime, fromMinutes, shiftSchedule, sortItems, spreadCatchUp, toMinutes, trimSchedule } from '@/lib/schedule';
 import { supabase } from '@/lib/supabase';
 
 export default function AdminScreen() {
@@ -23,11 +23,15 @@ export default function AdminScreen() {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [catchUpNote, setCatchUpNote] = useState<{ text: string; undo?: { dayId: string; items: ScheduleItem[] } } | null>(null);
   const navigation = useNavigation();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const items = sortItems(day.items);
   const editable = hasEvents && canManage(event.clubId);
   const clubName = clubs.find((c) => c.id === event.clubId)?.name ?? 'This club';
+
+  // A catch-up note (and its Undo) only applies to the day it was made on.
+  useEffect(() => setCatchUpNote(null), [day.id]);
 
   // Tapping the Admin tab again always brings back the dashboard.
   useEffect(
@@ -44,6 +48,23 @@ export default function AdminScreen() {
   if (importing) return <SheetImportForm onDone={() => setImporting(false)} />;
 
   const runLate = (minutes: number) => updateDay(day.id, shiftSchedule(items, clock.minuteOfDay, minutes));
+
+  // After an incident: shorten the remaining track sessions so the day finishes `minutes` earlier.
+  const catchUp = (minutes: number) => {
+    const cuts = spreadCatchUp(items, clock.minuteOfDay, minutes);
+    const used = Object.values(cuts).filter((c) => c > 0);
+    const total = used.reduce((sum, c) => sum + c, 0);
+    if (!total) return setCatchUpNote({ text: 'No upcoming track sessions are long enough to shorten.' });
+    const next = trimSchedule(items, clock.minuteOfDay, cuts);
+    const lastEnd = sortItems(next).reduce((latest, i) => Math.max(latest, toMinutes(i.end)), 0);
+    const per = Math.min(...used) === Math.max(...used) ? `${used[0]} min` : `${Math.min(...used)}–${Math.max(...used)} min`;
+    const short = total < minutes ? ` That's all that fits without making sessions shorter than 10 minutes.` : '';
+    setCatchUpNote({
+      text: `Caught up ${total} min: ${used.length} sessions are ${per} shorter, and the day now ends at ${formatTime(fromMinutes(lastEnd))}.${short}`,
+      undo: { dayId: day.id, items: day.items },
+    });
+    updateDay(day.id, next);
+  };
 
   const editItem = (id: string, change: (item: ScheduleItem) => ScheduleItem | null) =>
     updateDay(
@@ -116,6 +137,32 @@ export default function AdminScreen() {
             ))}
             <Btn label="−5 min" onPress={() => runLate(-5)} />
           </View>
+
+          <Text style={[styles.heading, styles.sessionsHeading]}>Catch up after an incident</Text>
+          <Text style={styles.sub}>
+            Shortens the track sessions that haven't started yet, spread evenly, so the day ends earlier. Lunch,
+            classroom and meetings keep their length.
+          </Text>
+          <View style={styles.buttons}>
+            {[5, 10, 15, 20, 30].map((m) => (
+              <Btn key={m} label={`Catch up ${m} min`} onPress={() => catchUp(m)} />
+            ))}
+          </View>
+          {catchUpNote ? (
+            <View style={styles.catchUpNote}>
+              <Text style={styles.catchUpText}>{catchUpNote.text}</Text>
+              {catchUpNote.undo ? (
+                <Btn
+                  label="Undo"
+                  onPress={() => {
+                    const undo = catchUpNote.undo;
+                    if (undo) updateDay(undo.dayId, undo.items);
+                    setCatchUpNote(null);
+                  }}
+                />
+              ) : null}
+            </View>
+          ) : null}
 
           <Text style={[styles.heading, styles.sessionsHeading]}>Sessions</Text>
           <Text style={styles.sub}>Tap a session to change its times.</Text>
@@ -252,6 +299,8 @@ const styles = StyleSheet.create({
   heading: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 8 },
   sub: { color: colors.muted, fontSize: 13, marginTop: 2, marginBottom: 10 },
   sessionsHeading: { marginTop: 24 },
+  catchUpNote: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: 12, padding: 12, marginTop: 10 },
+  catchUpText: { color: colors.text, fontSize: 13, flex: 1 },
   eventActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   signedIn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#10261A', borderRadius: 12, padding: 12, marginBottom: 12 },
   signedInText: { color: '#34C759', fontSize: 13, flex: 1 },
