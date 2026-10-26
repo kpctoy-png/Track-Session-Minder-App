@@ -26,6 +26,31 @@ alter table events add column if not exists club_id text references clubs (id);
 update events set club_id = 'just-track-it' where club_id is null;
 alter table events alter column club_id set not null;
 
+-- The track's time zone, so 15-minute reminders go out at the right local time.
+-- Guessed from the state at the end of the location ("Birmingham, AL").
+alter table events add column if not exists time_zone text;
+create or replace function guess_time_zone(location text) returns text
+  language sql immutable as $$
+  select case
+    when location ~* ',\s*(AL|AR|IA|IL|KS|LA|MN|MO|MS|NE|OK|TX|WI)\s*$' then 'America/Chicago'
+    when location ~* ',\s*(CO|MT|NM|UT|WY)\s*$' then 'America/Denver'
+    when location ~* ',\s*AZ\s*$' then 'America/Phoenix'
+    when location ~* ',\s*(CA|NV|OR|WA)\s*$' then 'America/Los_Angeles'
+    else 'America/New_York' end;
+$$;
+update events set time_zone = guess_time_zone(location) where time_zone is null;
+create or replace function set_event_time_zone() returns trigger
+  language plpgsql as $$
+begin
+  if new.time_zone is null or (tg_op = 'UPDATE' and new.location is distinct from old.location) then
+    new.time_zone := guess_time_zone(new.location);
+  end if;
+  return new;
+end $$;
+drop trigger if exists event_time_zone on events;
+create trigger event_time_zone before insert or update on events
+  for each row execute function set_event_time_zone();
+
 -- Each day's schedule is stored as one list, so shifting the whole day is a
 -- single update that every phone receives at once.
 create table if not exists event_days (
@@ -300,6 +325,10 @@ create table if not exists push_subscriptions (
   created_at timestamptz not null default now()
 );
 alter table push_subscriptions enable row level security;
+-- Set when the driver is signed in (My Day), so their own coaching and check
+-- rides can alert them too. Always the signed-in person's own address.
+alter table push_subscriptions add column if not exists email text;
+create index if not exists push_subscriptions_email on push_subscriptions (email);
 
 -- Null until the Edge Function has made its keys (an organizer opening Admin does that).
 create or replace function push_public_key() returns text
@@ -308,11 +337,13 @@ create or replace function push_public_key() returns text
 $$;
 
 -- One event per phone: signing up again moves the phone's alerts to the new event.
+-- The app calls it again after signing in or out, to attach or drop the email.
 create or replace function subscribe_push(sub_endpoint text, sub_p256dh text, sub_auth text, sub_event text) returns void
   language sql security definer set search_path = public as $$
-  insert into push_subscriptions (endpoint, p256dh, auth, event_id)
-  values (sub_endpoint, sub_p256dh, sub_auth, sub_event)
-  on conflict (endpoint) do update set p256dh = excluded.p256dh, auth = excluded.auth, event_id = excluded.event_id;
+  insert into push_subscriptions (endpoint, p256dh, auth, event_id, email)
+  values (sub_endpoint, sub_p256dh, sub_auth, sub_event, nullif(lower(auth.jwt() ->> 'email'), ''))
+  on conflict (endpoint) do update set p256dh = excluded.p256dh, auth = excluded.auth,
+    event_id = excluded.event_id, email = excluded.email;
 $$;
 
 create or replace function unsubscribe_push(sub_endpoint text) returns void
@@ -321,6 +352,57 @@ create or replace function unsubscribe_push(sub_endpoint text) returns void
 $$;
 
 grant execute on function push_public_key(), subscribe_push(text, text, text, text), unsubscribe_push(text) to anon, authenticated;
+
+-- Coaching and check ride alerts. The start time each booking was last alerted
+-- for, so a schedule change only alerts the bookings it actually moved, and
+-- each 15-minute reminder goes out once.
+create table if not exists booking_push_state (
+  session_id uuid primary key references coaching_sessions (id) on delete cascade,
+  notified_start text,
+  reminded_start text
+);
+alter table booking_push_state enable row level security;
+
+insert into webhook_secrets (name) values ('push-schedule') on conflict (name) do nothing;
+
+-- Tell the alert function when a booking is made, changed or removed.
+create or replace function push_booking() returns trigger
+  language plpgsql security definer set search_path = public as $$
+begin
+  perform net.http_post(
+    url := 'https://trxqycpyhnzfyctajmsb.supabase.co/functions/v1/push-schedule',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-webhook-secret', (select secret from webhook_secrets where name = 'push-schedule')
+    ),
+    body := jsonb_build_object(
+      'action', 'booking',
+      'type', tg_op,
+      'record', case when tg_op = 'DELETE' then null else to_jsonb(new) end,
+      'old_record', case when tg_op = 'INSERT' then null else
+        to_jsonb(old) || jsonb_build_object('event_name', (select e.name from events e join event_days d on d.event_id = e.id where d.id = old.day_id),
+                                             'day_label', (select label from event_days where id = old.day_id),
+                                             'day_items', (select items from event_days where id = old.day_id)) end
+    )
+  );
+  return null;
+end $$;
+drop trigger if exists coaching_push on coaching_sessions;
+create trigger coaching_push after insert or update or delete on coaching_sessions
+  for each row execute function push_booking();
+
+-- Every minute, ask the alert function to send any 15-minute reminders that are due.
+create extension if not exists pg_cron;
+select cron.schedule('coaching-reminders', '* * * * *', $cron$
+  select net.http_post(
+    url := 'https://trxqycpyhnzfyctajmsb.supabase.co/functions/v1/push-schedule',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-webhook-secret', (select secret from public.webhook_secrets where name = 'push-schedule')
+    ),
+    body := '{"action":"reminders"}'::jsonb
+  );
+$cron$);
 
 -- Drivers who chose to join a club's list from the Now tab ("Stay in the loop"),
 -- agreeing that the club may email them. Each club sees only its own list.

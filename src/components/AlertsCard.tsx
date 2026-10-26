@@ -1,14 +1,15 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { getAlertsState, turnOffAlerts, turnOnAlerts, type AlertsState } from '@/lib/push';
+import { getAlertsState, refreshAlerts, turnOffAlerts, turnOnAlerts, type AlertsState } from '@/lib/push';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { colors } from './theme';
 
 /** Lets a driver get phone alerts when the selected event's schedule changes (web version only). */
 export function AlertsCard() {
-  const { events, event } = useSchedule();
+  const { events, event, session } = useSchedule();
+  const email = session?.user.email ?? null;
   const [alerts, setAlerts] = useState<AlertsState>({ state: 'unsupported' });
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -19,6 +20,11 @@ export function AlertsCard() {
       getAlertsState().then(setAlerts, () => {});
     }, []),
   );
+
+  // Signing in or out on My Day: attach or drop the email, so booking alerts follow who is signed in.
+  useEffect(() => {
+    refreshAlerts().catch(() => {});
+  }, [email]);
 
   const turnOn = async () => {
     setBusy(true);
@@ -53,7 +59,10 @@ export function AlertsCard() {
         </Text>
       ) : onHere ? (
         <View style={styles.row}>
-          <Text style={[styles.text, styles.grow]}>🔔 Alerts are on: you'll get one when {event.name} changes.</Text>
+          <Text style={[styles.text, styles.grow]}>
+            🔔 Alerts are on: you'll get one when {event.name} changes
+            {email ? ', and about your coaching and check rides' : ''}.
+          </Text>
           <Pressable onPress={turnOff} disabled={busy}>
             <Text style={styles.link}>Turn off</Text>
           </Pressable>
@@ -63,7 +72,7 @@ export function AlertsCard() {
           <Text style={styles.text}>
             {elsewhere
               ? `🔔 Your alerts are for ${elsewhere}. Switch them to ${event.name}?`
-              : `🔔 Get an alert on this phone when the ${event.name} schedule changes.`}
+              : `🔔 Get an alert on this phone when the ${event.name} schedule changes${email ? ', and about your coaching and check rides' : ''}.`}
           </Text>
           <Pressable onPress={turnOn} disabled={busy} style={styles.btn}>
             <Text style={styles.btnText}>{busy ? 'Turning on…' : elsewhere ? 'Switch alerts' : 'Turn on alerts'}</Text>

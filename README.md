@@ -92,6 +92,14 @@ Function in `supabase/functions/push-schedule`. One-time setup:
 3. Sign in to Admin once. That makes the alert keys; until then the alerts
    card stays hidden. No secrets to add.
 
+Drivers who are signed in on My Day when alerts are on also get alerts about
+their own coaching sessions and check rides (booked, changed, cancelled, or
+moved by a schedule change), and a reminder 15 minutes before each one. The
+same goes for instructors with an email on the booking. The reminders come from
+a `pg_cron` job, made by `setup.sql`, that calls the function every minute.
+Times are worked out in the track's time zone (`events.time_zone`, guessed from
+the state in the event's location).
+
 ### Driver list
 
 An optional "Stay in the loop" card at the bottom of the Now tab lets drivers
