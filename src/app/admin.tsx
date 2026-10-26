@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CoachingAdmin } from '@/components/CoachingAdmin';
+import { Collapsible } from '@/components/Collapsible';
 import { EmailCodeSignIn } from '@/components/EmailCodeSignIn';
 import { EventPicker } from '@/components/EventPicker';
 import { FeedbackAdmin } from '@/components/FeedbackAdmin';
@@ -20,8 +21,11 @@ import { formatRange, formatTime, fromMinutes, shiftSchedule, sortItems, spreadC
 import { supabase } from '@/lib/supabase';
 
 export default function AdminScreen() {
-  const { clubs, event, day, clock, updateDay, deleteEvent, session, sync, hasEvents, manageableClubs, canManage, isPlatformAdmin } = useSchedule();
+  const { clubs, event, day, clock, coaching, updateDay, deleteEvent, session, sync, hasEvents, manageableClubs, canManage, isPlatformAdmin } = useSchedule();
   const [editing, setEditing] = useState<string | null>(null);
+  // The session being edited: time changes are staged here and only sent once confirmed.
+  const [draft, setDraft] = useState<ScheduleItem | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -41,7 +45,15 @@ export default function AdminScreen() {
   useEffect(() => {
     setCatchUpNote(null);
     setPending(null);
+    setEditing(null);
   }, [day.id]);
+
+  // Opening another session (or closing one) drops any unsent changes.
+  useEffect(() => {
+    setDraft(editing ? (day.items.find((i) => i.id === editing) ?? null) : null);
+    setConfirmRemove(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing]);
 
   // Organizers opening Admin make sure phone alerts are ready for drivers to turn on.
   useEffect(() => {
@@ -100,16 +112,16 @@ export default function AdminScreen() {
     save(day.id, next, `Caught up ${total} min`);
   };
 
-  const editItem = (id: string, change: (item: ScheduleItem) => ScheduleItem | null) => {
+  /** Sends a session's staged change (or its removal, when `next` is null) to drivers. */
+  const commitItem = (id: string, next: ScheduleItem | null) => {
     const item = items.find((i) => i.id === id);
     if (!item) return;
-    const next = change(item);
-    if (next === item) return;
     save(
       day.id,
       items.flatMap((i) => (i.id !== id ? [i] : next ? [next] : [])),
       next ? `${next.title} now ${formatRange(next)}` : `${item.title} removed`,
     );
+    setEditing(null);
   };
 
   const nudge = (field: 'start' | 'end', delta: number) => (item: ScheduleItem) => {
@@ -166,7 +178,8 @@ export default function AdminScreen() {
 
         {editable ? (
           <>
-            <Text style={styles.heading}>Running late?</Text>
+            <Collapsible id="late" title="Running late or catching up" summary="Moves or shortens the rest of the day" defaultOpen>
+            <Text style={styles.subheading}>Running late?</Text>
             <Text style={styles.sub}>Shifts everything after {formatTime(fromMinutes(clock.minuteOfDay))}.</Text>
             <View style={styles.buttons}>
               {[5, 10, 15, 30, 45, 60].map((m) => (
@@ -185,7 +198,7 @@ export default function AdminScreen() {
               />
             ) : null}
 
-            <Text style={[styles.heading, styles.sessionsHeading]}>Catch up after an incident</Text>
+            <Text style={[styles.subheading, styles.sessionsHeading]}>Catch up after an incident</Text>
             <Text style={styles.sub}>
               Shortens the track sessions that haven't started yet, spread evenly, so the day ends earlier. Lunch,
               classroom and meetings keep their length.
@@ -220,28 +233,56 @@ export default function AdminScreen() {
                 ) : null}
               </View>
             ) : null}
+            </Collapsible>
 
-            <Text style={[styles.heading, styles.sessionsHeading]}>Sessions</Text>
-            <Text style={styles.sub}>Tap a session to change its times.</Text>
-
+            <Collapsible id="sessions" title="Sessions" summary={`${items.length} on ${day.label} · tap one to change its times`}>
             {items.map((item) => (
               <View key={item.id}>
                 <Pressable onPress={() => setEditing(editing === item.id ? null : item.id)}>
-                  <ItemRow item={item} />
+                  <ItemRow item={editing === item.id && draft ? draft : item} />
                 </Pressable>
-                {editing === item.id ? (
+                {editing === item.id && draft ? (
                   <View style={styles.editor}>
-                    <EditLine label="Start" onMinus={() => editItem(item.id, nudge('start', -5))} onPlus={() => editItem(item.id, nudge('start', 5))} />
-                    <EditLine label="End" onMinus={() => editItem(item.id, nudge('end', -5))} onPlus={() => editItem(item.id, nudge('end', 5))} />
-                    <Btn label="Remove session" onPress={() => editItem(item.id, () => null)} danger />
+                    <EditLine label="Start" onMinus={() => setDraft(nudge('start', -5)(draft))} onPlus={() => setDraft(nudge('start', 5)(draft))} />
+                    <EditLine label="End" onMinus={() => setDraft(nudge('end', -5)(draft))} onPlus={() => setDraft(nudge('end', 5)(draft))} />
+                    {draft.start !== item.start || draft.end !== item.end ? (
+                      <Confirm
+                        question={`Change ${item.title} from ${formatRange(item)} to ${formatRange(draft)}?`}
+                        onConfirm={() => commitItem(item.id, draft)}
+                        onCancel={() => setEditing(null)}
+                      />
+                    ) : confirmRemove ? (
+                      <Confirm
+                        question={`Remove ${item.title} (${formatRange(item)}) from ${day.label}?`}
+                        confirmLabel="Remove and send to drivers"
+                        onConfirm={() => commitItem(item.id, null)}
+                        onCancel={() => setConfirmRemove(false)}
+                      />
+                    ) : (
+                      <Btn label="Remove session" onPress={() => setConfirmRemove(true)} danger />
+                    )}
                   </View>
                 ) : null}
               </View>
             ))}
+            </Collapsible>
 
-            <CoachingAdmin />
-            <FeedbackAdmin eventId={event.id} title={`Feedback on ${event.name}`} />
-            <SignupsAdmin clubId={event.clubId} clubName={clubName} />
+            <Collapsible
+              id="coaching"
+              title="Coaching and check rides"
+              summary={(() => {
+                const n = coaching.filter((c) => c.dayId === day.id).length;
+                return n ? `${n} booked on ${day.label}` : `None booked on ${day.label}`;
+              })()}
+            >
+              <CoachingAdmin />
+            </Collapsible>
+            <Collapsible id="feedback" title="Feedback" summary={`Ratings and comments on ${event.name}`}>
+              <FeedbackAdmin eventId={event.id} />
+            </Collapsible>
+            <Collapsible id="signups" title="Driver list" summary={`Drivers who joined the ${clubName} list`}>
+              <SignupsAdmin clubId={event.clubId} />
+            </Collapsible>
           </>
         ) : (
           <Text style={styles.sub}>
@@ -254,8 +295,16 @@ export default function AdminScreen() {
                 : 'This account is not an organizer account, so it can view schedules but not change them.'}
           </Text>
         )}
-        {isPlatformAdmin ? <FeedbackAdmin eventId={null} title="Feedback on the app" /> : null}
-        {isPlatformAdmin && supabase ? <ManageOrganizers /> : null}
+        {isPlatformAdmin ? (
+          <Collapsible id="app-feedback" title="Feedback on the app" summary="Redline only">
+            <FeedbackAdmin eventId={null} />
+          </Collapsible>
+        ) : null}
+        {isPlatformAdmin && supabase ? (
+          <Collapsible id="organizers" title="Manage organizers" summary="Redline only">
+            <ManageOrganizers />
+          </Collapsible>
+        ) : null}
       </ScrollView>
       {saved ? (
         <View style={styles.saved} pointerEvents="none">
@@ -347,12 +396,22 @@ function EditLine({ label, onMinus, onPlus }: { label: string; onMinus: () => vo
   );
 }
 
-function Confirm({ question, onConfirm, onCancel }: { question: string; onConfirm: () => void; onCancel: () => void }) {
+function Confirm({
+  question,
+  confirmLabel = 'Send to drivers',
+  onConfirm,
+  onCancel,
+}: {
+  question: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
   return (
     <View style={styles.confirm}>
       <Text style={styles.confirmText}>{question}</Text>
       <View style={styles.buttons}>
-        <Btn label="Send to drivers" onPress={onConfirm} primary />
+        <Btn label={confirmLabel} onPress={onConfirm} primary />
         <Btn label="Cancel" onPress={onCancel} />
       </View>
     </View>
@@ -377,7 +436,8 @@ const styles = StyleSheet.create({
   noticeText: { color: '#FFD60A', fontSize: 13 },
   heading: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 8 },
   sub: { color: colors.muted, fontSize: 13, marginTop: 2, marginBottom: 10 },
-  sessionsHeading: { marginTop: 24 },
+  sessionsHeading: { marginTop: 20 },
+  subheading: { color: colors.text, fontSize: 16, fontWeight: '700' },
   confirm: { borderWidth: 2, borderColor: colors.accent, borderRadius: 12, padding: 12, marginTop: 10, gap: 10 },
   confirmText: { color: colors.text, fontSize: 15, fontWeight: '600' },
   catchUpNote: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: 12, padding: 12, marginTop: 10 },

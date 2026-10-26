@@ -17,6 +17,7 @@ export function ManageOrganizers() {
   const [clubId, setClubId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
   const club = clubId ?? (clubs.length === 1 ? clubs[0].id : null);
 
   const load = useCallback(async () => {
@@ -61,7 +62,6 @@ export function ManageOrganizers() {
 
   return (
     <View>
-      <Text style={styles.heading}>Manage organizers</Text>
       <Text style={styles.sub}>
         Organizers can change their club's events. Add their email here, then send them the admin link. They sign in
         with a code we email them, no password needed.
@@ -73,9 +73,26 @@ export function ManageOrganizers() {
               <Text style={styles.email}>{o.email}</Text>
               <Text style={styles.club}>{clubName(o.club_id)}</Text>
             </View>
-            <Pressable onPress={() => remove(o)} style={styles.btn}>
-              <Text style={styles.btnText}>Remove</Text>
-            </Pressable>
+            {removing === `${o.email}-${o.club_id}` ? (
+              <>
+                <Pressable
+                  onPress={() => {
+                    setRemoving(null);
+                    remove(o);
+                  }}
+                  style={[styles.btn, styles.btnDanger]}
+                >
+                  <Text style={styles.btnText}>Remove access</Text>
+                </Pressable>
+                <Pressable onPress={() => setRemoving(null)} style={styles.btn}>
+                  <Text style={styles.btnText}>Keep</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable onPress={() => setRemoving(`${o.email}-${o.club_id}`)} style={styles.btn}>
+                <Text style={styles.btnText}>Remove</Text>
+              </Pressable>
+            )}
           </View>
         ))
       ) : organizers ? (
@@ -125,6 +142,7 @@ const styles = StyleSheet.create({
   chipTextOn: { color: '#000', fontWeight: '700' },
   error: { color: '#FF6961', fontSize: 13, marginBottom: 8 },
   btn: { backgroundColor: colors.cardRaised, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+  btnDanger: { borderColor: '#FF453A' },
   btnPrimary: { backgroundColor: colors.accent, borderColor: colors.accent },
   btnText: { color: colors.text, fontWeight: '600' },
   btnTextPrimary: { color: '#000' },
