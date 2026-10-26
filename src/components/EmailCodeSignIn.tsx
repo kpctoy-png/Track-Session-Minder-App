@@ -38,7 +38,8 @@ export function EmailCodeSignIn({ heading, intro, emailHint, idPrefix, children 
     if (!supabase || !sentTo) return;
     setBusy(true);
     setError(null);
-    const { error } = await supabase.auth.verifyOtp({ email: sentTo, token: code.trim(), type: 'email' });
+    // Pasted codes can carry stray dots or spaces from the email; only the digits count.
+    const { error } = await supabase.auth.verifyOtp({ email: sentTo, token: code.replace(/\D/g, ''), type: 'email' });
     setBusy(false);
     if (error) setError('That code did not work. Check the newest email, or send a new code.');
   };
