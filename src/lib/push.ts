@@ -104,6 +104,19 @@ export async function turnOnAlerts(eventId: string): Promise<string | null> {
   }
 }
 
+/**
+ * Signs this phone's alerts up again for the same event, without asking permission again. Called after
+ * signing in or out, so alerts about the person's own coaching and check rides follow who is signed in.
+ */
+export async function refreshAlerts(): Promise<void> {
+  const eventId = storedEvent();
+  if (!supabase || !eventId || Platform.OS !== 'web' || !canPush() || Notification.permission !== 'granted') return;
+  const subscription = await currentSubscription();
+  if (!subscription) return;
+  const { endpoint, keys } = subscription.toJSON();
+  await supabase.rpc('subscribe_push', { sub_endpoint: endpoint, sub_p256dh: keys?.p256dh, sub_auth: keys?.auth, sub_event: eventId });
+}
+
 export async function turnOffAlerts(): Promise<void> {
   const subscription = await currentSubscription();
   if (subscription) {
@@ -118,10 +131,13 @@ export function setUpAlerts() {
   supabase?.functions.invoke('push-schedule', { body: { action: 'setup' } }).catch(() => {});
 }
 
-/** Organizers: alerts the phones signed up for this event. Failing to alert never undoes the change. */
-export function alertDrivers(eventId: string, body: string) {
+/**
+ * Organizers: alerts the phones signed up for this event, and the students and instructors whose bookings
+ * on that day the change moved. Failing to alert never undoes the change.
+ */
+export function alertDrivers(eventId: string, dayId: string, body: string) {
   supabase?.functions
-    .invoke('push-schedule', { body: { action: 'send', eventId, body } })
+    .invoke('push-schedule', { body: { action: 'send', eventId, dayId, body } })
     .then(({ error }) => error && console.warn('Alerts not sent:', error.message))
     .catch(() => {});
 }

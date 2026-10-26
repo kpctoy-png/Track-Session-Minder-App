@@ -73,7 +73,7 @@ export default function AdminScreen() {
     if (!(await updateDay(dayId, next))) return;
     setSaved({ text: `✓ ${what} · sent to drivers`, at: Date.now() });
     const dayLabel = event.days.find((d) => d.id === dayId)?.label;
-    alertDrivers(event.id, `${dayLabel && event.days.length > 1 ? `${dayLabel}: ` : ''}${what}. Tap to see the new times.`);
+    alertDrivers(event.id, dayId, `${dayLabel && event.days.length > 1 ? `${dayLabel}: ` : ''}${what}. Tap to see the new times.`);
   };
 
   const runLate = (minutes: number) =>

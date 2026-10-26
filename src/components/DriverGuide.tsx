@@ -49,6 +49,10 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
         </Body>
         <Step>iPhone: alerts only work in the home screen app (iOS 16.4 or newer), so add it there first.</Step>
         <Step>To stop them, tap Turn off on the same card.</Step>
+        <Body>
+          Booked coaching or a check ride? Sign in on the My Day tab with your booking email on the same phone. You'll
+          then also get an alert when it's booked, changed or moved, and a reminder 15 minutes before it starts.
+        </Body>
       </Section>
 
       <Section title="Schedule tab: the whole day">

@@ -2,9 +2,15 @@
 //
 // The app calls it with { action: 'setup' } when an organizer opens Admin (this makes the
 // alert keys the first time, so drivers can then turn alerts on), and with
-// { action: 'send', eventId, body } after an organizer's change is saved. Sending checks
+// { action: 'send', eventId, dayId, body } after an organizer's change is saved. Sending checks
 // that the signed-in user may manage the event's club, then alerts every phone signed up
-// for that event and forgets phones whose alerts were turned off.
+// for that event, plus the students and instructors whose bookings that change moved.
+//
+// The database calls it too, with the secret from its webhook_secrets table:
+// { action: 'booking' } from a trigger when a coaching session or check ride is booked,
+// changed or removed, and { action: 'reminders' } every minute (pg_cron) to send the
+// "starts in 15 minutes" reminders. Booking alerts reach the phones whose driver turned
+// alerts on while signed in with the student's or instructor's email.
 //
 // No secrets to set: the keys are made here and kept in the push_config table, which
 // only the service role can read. SUPABASE_URL, SUPABASE_ANON_KEY and
@@ -61,6 +67,188 @@ async function canManage(req: Request, clubId: string): Promise<boolean> {
   return allowed === true;
 }
 
+interface Sub {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
+interface Item {
+  id: string;
+  start: string;
+  end: string;
+}
+
+interface Booking {
+  id: string;
+  day_id: string;
+  item_id: string | null;
+  kind: string;
+  student_email: string;
+  coach: string;
+  coach_email: string | null;
+  start_time: string;
+  end_time: string;
+}
+
+/** Sends one alert to each phone, and forgets phones whose alerts were turned off. */
+async function pushTo(subs: Sub[], alert: { title: string; body: string; tag: string }) {
+  if (!subs.length) return { sent: 0, removed: 0 };
+  const server = await webpush.ApplicationServer.new({ contactInformation: APP_URL, vapidKeys: await vapidKeys() });
+  const message = JSON.stringify({ ...alert, url: APP_URL });
+  let sent = 0;
+  const gone: string[] = [];
+  await Promise.all(
+    subs.map(async (s) => {
+      try {
+        await server
+          .subscribe({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } })
+          .pushTextMessage(message, { urgency: webpush.Urgency.High, ttl: 3600, topic: alert.tag.slice(0, 32) });
+        sent++;
+      } catch (err) {
+        // 404/410: the phone turned alerts off or the browser dropped the subscription.
+        const status = err instanceof webpush.PushMessageError ? err.response.status : 0;
+        if (status === 404 || status === 410) gone.push(s.endpoint);
+        else console.error('push failed', status, String(err));
+      }
+    }),
+  );
+  if (gone.length) await db.from('push_subscriptions').delete().in('endpoint', gone);
+  return { sent, removed: gone.length };
+}
+
+/** Phones signed in with this email (lowercase) when alerts were turned on. */
+async function phonesOf(email: string | null | undefined): Promise<Sub[]> {
+  if (!email) return [];
+  const { data } = await db.from('push_subscriptions').select('endpoint, p256dh, auth').eq('email', email.toLowerCase());
+  return data ?? [];
+}
+
+/** True when the request comes from the database (trigger or timer). */
+async function fromDatabase(req: Request): Promise<boolean> {
+  const given = req.headers.get('x-webhook-secret');
+  if (!given) return false;
+  const { data } = await db.from('webhook_secrets').select('secret').eq('name', 'push-schedule').maybeSingle();
+  return !!data && data.secret === given;
+}
+
+const toMinutes = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+
+/** "1:05 PM", as the app shows times. */
+function formatTime(hhmm: string): string {
+  const total = toMinutes(hhmm);
+  const h = Math.floor(total / 60);
+  return `${((h + 11) % 12) + 1}:${String(total % 60).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+/** The booking's start, taken from its schedule item when that still exists, as the app does. */
+function startOf(b: Booking, items: Item[] | null | undefined): string {
+  return (b.item_id && items?.find((i) => i.id === b.item_id)?.start) || b.start_time;
+}
+
+const kindName = (b: Booking) => (b.kind === 'checkride' ? 'check ride' : 'coaching session');
+const capital = (text: string) => text[0].toUpperCase() + text.slice(1);
+const withCoach = (b: Booking) => (b.coach ? `, with ${b.coach}` : '');
+/** What the instructor's alerts call the booking: "Check ride for sam@example.com". */
+const forStudent = (b: Booking) => `${b.kind === 'checkride' ? 'Check ride' : 'Coaching'} for ${b.student_email}`;
+
+/** Alerts the student, and the instructor when they have a different email. */
+async function alertBooking(b: Booking, title: string, student: string, coach: string) {
+  const tag = `booking-${b.id}`;
+  await pushTo(await phonesOf(b.student_email), { title, body: student, tag });
+  if (b.coach_email && b.coach_email.toLowerCase() !== b.student_email)
+    await pushTo(await phonesOf(b.coach_email), { title, body: coach, tag });
+}
+
+/** A booking was made, changed or removed. */
+async function bookingChanged(input: { type: string; record: Booking | null; old_record: (Booking & { event_name?: string; day_label?: string; day_items?: Item[] }) | null }) {
+  const b = input.record ?? input.old_record;
+  if (!b) return;
+  if (input.type === 'DELETE') {
+    const old = input.old_record!;
+    const when = `${old.day_label ? `on ${old.day_label} ` : ''}at ${formatTime(startOf(old, old.day_items))}`;
+    await alertBooking(old, old.event_name ?? 'Track Session Minder',
+      `Your ${kindName(old)} ${when} was cancelled.`, `${forStudent(old)} ${when} was cancelled.`);
+    return;
+  }
+  const { data: day } = await db.from('event_days').select('label, items, events(name)').eq('id', b.day_id).maybeSingle();
+  const start = startOf(b, day?.items);
+  const old = input.old_record;
+  if (input.type === 'UPDATE' && old) {
+    const same = (['day_id', 'item_id', 'kind', 'student_email', 'coach', 'coach_email', 'start_time'] as const).every((k) => old[k] === b[k]);
+    if (same) return; // Only the notes changed.
+  }
+  const when = `${day?.label ? `${day.label} ` : ''}at ${formatTime(start)}`;
+  const title = (day?.events as { name?: string } | null)?.name ?? 'Track Session Minder';
+  if (input.type === 'INSERT')
+    await alertBooking(b, title, `Your ${kindName(b)} is booked: ${when}${withCoach(b)}.`, `${forStudent(b)} is booked: ${when}.`);
+  else
+    await alertBooking(b, title, `Your ${kindName(b)} changed: now ${when}${withCoach(b)}.`, `${forStudent(b)} changed: now ${when}.`);
+  await db.from('booking_push_state').upsert({ session_id: b.id, notified_start: start });
+}
+
+/** After a schedule change: alerts the bookings on that day whose start time it moved. */
+async function bookingsMoved(dayId: string, eventName: string) {
+  const { data: day } = await db.from('event_days').select('label, items').eq('id', dayId).maybeSingle();
+  const { data: bookings } = await db.from('coaching_sessions').select('*').eq('day_id', dayId).not('item_id', 'is', null);
+  if (!day || !bookings?.length) return;
+  const { data: states } = await db.from('booking_push_state').select('session_id, notified_start').in('session_id', bookings.map((b) => b.id));
+  for (const b of bookings as Booking[]) {
+    const start = startOf(b, day.items);
+    const before = states?.find((s) => s.session_id === b.id)?.notified_start ?? b.start_time;
+    if (start === before) continue;
+    const when = `${formatTime(start)} (${day.label})`;
+    await alertBooking(b, eventName, `Your ${kindName(b)} moved to ${when}${withCoach(b)}.`, `${forStudent(b)} moved to ${when}.`);
+    await db.from('booking_push_state').upsert({ session_id: b.id, notified_start: start });
+  }
+}
+
+/** The date ("2026-10-31") and minute of the day (with seconds as a fraction) at the track right now. */
+function localNow(timeZone: string): { date: string; minute: number } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date())
+      .map((p) => [p.type, p.value]),
+  );
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, minute: Number(parts.hour) * 60 + Number(parts.minute) + Number(parts.second) / 60 };
+}
+
+const REMIND_BEFORE = 15;
+
+/** Runs every minute: "starts in 15 minutes" for bookings about to start. */
+async function sendReminders() {
+  const today = new Date();
+  const dates = [-1, 0, 1].map((d) => new Date(today.getTime() + d * 86400000).toISOString().slice(0, 10));
+  const { data: days } = await db.from('event_days').select('id, date, items, events(name, time_zone)').in('date', dates);
+  let reminded = 0;
+  for (const day of days ?? []) {
+    const event = day.events as { name: string; time_zone: string | null } | null;
+    const now = localNow(event?.time_zone || 'America/New_York');
+    if (now.date !== day.date) continue;
+    const { data: bookings } = await db.from('coaching_sessions').select('*').eq('day_id', day.id);
+    if (!bookings?.length) continue;
+    const { data: states } = await db.from('booking_push_state').select('session_id, reminded_start').in('session_id', bookings.map((b) => b.id));
+    for (const b of bookings as Booking[]) {
+      const start = startOf(b, day.items);
+      const until = toMinutes(start) - now.minute;
+      // A two-minute window, so a late timer run still catches it; reminded_start stops repeats.
+      if (until <= REMIND_BEFORE - 2 || until > REMIND_BEFORE) continue;
+      if (states?.find((s) => s.session_id === b.id)?.reminded_start === start) continue;
+      const mins = `${Math.ceil(until)} minutes (${formatTime(start)})`;
+      const instructor = b.coach ? `your instructor, ${b.coach}` : 'your instructor';
+      await alertBooking(b, event?.name ?? 'Track Session Minder',
+        `Your ${kindName(b)} starts in ${mins}, please pair with ${instructor}.`,
+        `${forStudent(b)} starts in ${mins}, please pair with your student.`);
+      await db.from('booking_push_state').upsert({ session_id: b.id, reminded_start: start });
+      reminded++;
+    }
+  }
+  return reminded;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return reply(405, { error: 'POST only' });
@@ -81,29 +269,18 @@ Deno.serve(async (req) => {
       if (!(await canManage(req, event.club_id))) return reply(403, { error: 'Not an organizer for this event' });
 
       const { data: subs } = await db.from('push_subscriptions').select('endpoint, p256dh, auth').eq('event_id', eventId);
-      if (!subs?.length) return reply(200, { sent: 0, removed: 0 });
+      const result = await pushTo(subs ?? [], { title: event.name, body, tag: eventId });
+      if (input.dayId) await bookingsMoved(String(input.dayId), event.name);
+      return reply(200, result);
+    }
 
-      const server = await webpush.ApplicationServer.new({ contactInformation: APP_URL, vapidKeys: await vapidKeys() });
-      const message = JSON.stringify({ title: event.name, body, url: APP_URL, tag: eventId });
-      let sent = 0;
-      const gone: string[] = [];
-      await Promise.all(
-        subs.map(async (s) => {
-          try {
-            await server
-              .subscribe({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } })
-              .pushTextMessage(message, { urgency: webpush.Urgency.High, ttl: 3600, topic: 'schedule' });
-            sent++;
-          } catch (err) {
-            // 404/410: the phone turned alerts off or the browser dropped the subscription.
-            const status = err instanceof webpush.PushMessageError ? err.response.status : 0;
-            if (status === 404 || status === 410) gone.push(s.endpoint);
-            else console.error('push failed', status, String(err));
-          }
-        }),
-      );
-      if (gone.length) await db.from('push_subscriptions').delete().in('endpoint', gone);
-      return reply(200, { sent, removed: gone.length });
+    if (input.action === 'booking' || input.action === 'reminders') {
+      if (!(await fromDatabase(req))) return reply(403, { error: 'Only the database may call this' });
+      if (input.action === 'booking') {
+        await bookingChanged(input);
+        return reply(200, { ok: true });
+      }
+      return reply(200, { reminded: await sendReminders() });
     }
 
     return reply(400, { error: 'Unknown action' });
