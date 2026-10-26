@@ -32,8 +32,14 @@ export default function AdminScreen() {
   const editable = hasEvents && canManage(event.clubId);
   const clubName = clubs.find((c) => c.id === event.clubId)?.name ?? 'This club';
 
-  // A catch-up note (and its Undo) only applies to the day it was made on.
-  useEffect(() => setCatchUpNote(null), [day.id]);
+  // Running late and Catch up change the whole day, so they wait for a second tap.
+  const [pending, setPending] = useState<{ kind: 'late' | 'catchUp'; minutes: number } | null>(null);
+
+  // A catch-up note (and its Undo), or a change waiting to be confirmed, only applies to the day it was made on.
+  useEffect(() => {
+    setCatchUpNote(null);
+    setPending(null);
+  }, [day.id]);
 
   useEffect(() => {
     if (!saved) return;
@@ -154,10 +160,20 @@ export default function AdminScreen() {
             <Text style={styles.sub}>Shifts everything after {formatTime(fromMinutes(clock.minuteOfDay))}.</Text>
             <View style={styles.buttons}>
               {[5, 10, 15, 30, 45, 60].map((m) => (
-                <Btn key={m} label={`+${m} min`} onPress={() => runLate(m)} primary />
+                <Btn key={m} label={`+${m} min`} onPress={() => setPending({ kind: 'late', minutes: m })} primary />
               ))}
-              <Btn label="−5 min" onPress={() => runLate(-5)} />
+              <Btn label="−5 min" onPress={() => setPending({ kind: 'late', minutes: -5 })} />
             </View>
+            {pending?.kind === 'late' ? (
+              <Confirm
+                question={`Move everything after ${formatTime(fromMinutes(clock.minuteOfDay))} ${Math.abs(pending.minutes)} min ${pending.minutes > 0 ? 'later' : 'earlier'}?`}
+                onConfirm={() => {
+                  runLate(pending.minutes);
+                  setPending(null);
+                }}
+                onCancel={() => setPending(null)}
+              />
+            ) : null}
 
             <Text style={[styles.heading, styles.sessionsHeading]}>Catch up after an incident</Text>
             <Text style={styles.sub}>
@@ -166,9 +182,19 @@ export default function AdminScreen() {
             </Text>
             <View style={styles.buttons}>
               {[5, 10, 15, 20, 30].map((m) => (
-                <Btn key={m} label={`Catch up ${m} min`} onPress={() => catchUp(m)} />
+                <Btn key={m} label={`Catch up ${m} min`} onPress={() => setPending({ kind: 'catchUp', minutes: m })} />
               ))}
             </View>
+            {pending?.kind === 'catchUp' ? (
+              <Confirm
+                question={`Shorten the remaining track sessions to catch up ${pending.minutes} min?`}
+                onConfirm={() => {
+                  catchUp(pending.minutes);
+                  setPending(null);
+                }}
+                onCancel={() => setPending(null)}
+              />
+            ) : null}
             {catchUpNote ? (
               <View style={styles.catchUpNote}>
                 <Text style={styles.catchUpText}>{catchUpNote.text}</Text>
@@ -310,6 +336,18 @@ function EditLine({ label, onMinus, onPlus }: { label: string; onMinus: () => vo
   );
 }
 
+function Confirm({ question, onConfirm, onCancel }: { question: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <View style={styles.confirm}>
+      <Text style={styles.confirmText}>{question}</Text>
+      <View style={styles.buttons}>
+        <Btn label="Send to drivers" onPress={onConfirm} primary />
+        <Btn label="Cancel" onPress={onCancel} />
+      </View>
+    </View>
+  );
+}
+
 function Btn({ label, onPress, primary, danger }: { label: string; onPress: () => void; primary?: boolean; danger?: boolean }) {
   return (
     <Pressable onPress={onPress} style={[styles.btn, primary && styles.btnPrimary, danger && styles.btnDanger]}>
@@ -329,6 +367,8 @@ const styles = StyleSheet.create({
   heading: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 8 },
   sub: { color: colors.muted, fontSize: 13, marginTop: 2, marginBottom: 10 },
   sessionsHeading: { marginTop: 24 },
+  confirm: { borderWidth: 2, borderColor: colors.accent, borderRadius: 12, padding: 12, marginTop: 10, gap: 10 },
+  confirmText: { color: colors.text, fontSize: 15, fontWeight: '600' },
   catchUpNote: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: 12, padding: 12, marginTop: 10 },
   catchUpText: { color: colors.text, fontSize: 13, flex: 1 },
   eventActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
