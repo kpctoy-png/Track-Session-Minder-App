@@ -43,3 +43,10 @@ export function addDays(iso: string, days: number): string {
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
+
+/** Whole days from one "YYYY-MM-DD" to another (negative when `to` is earlier). */
+export function daysBetween(from: string, to: string): number {
+  const a = parseISO(from);
+  const b = parseISO(to);
+  return a && b ? Math.round((b.getTime() - a.getTime()) / 86400000) : 0;
+}

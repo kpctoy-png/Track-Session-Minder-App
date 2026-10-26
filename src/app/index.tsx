@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EventPicker } from '@/components/EventPicker';
@@ -7,13 +8,16 @@ import { ItemTitle } from '@/components/ItemTitle';
 import { colors, itemColors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
 import { bookingName, coachingTimes, coachingTitle, sessionsFor } from '@/lib/coaching';
-import { shortDate, todayISO } from '@/lib/dates';
+import { daysBetween, shortDate, todayISO } from '@/lib/dates';
 import { useSchedule } from '@/lib/ScheduleStore';
-import { countdown, formatRange, formatTime, fromMinutes, getNowState, toMinutes } from '@/lib/schedule';
+import { countdown, formatRange, formatTime, fromMinutes, getNowState, sortItems, toMinutes } from '@/lib/schedule';
 
 export default function NowScreen() {
-  const { events, day, clock, hasEvents, coaching, myEmail, selectEvent, selectDay } = useSchedule();
+  const { events, event, day, clock, hasEvents, coaching, myEmail, selectEvent, selectDay } = useSchedule();
+  // On days without an event, the live cards would describe another day; they only show when asked for.
+  const [previewing, setPreviewing] = useState(false);
   if (!hasEvents) return <LoadingOrError status="live" />;
+  const showLive = !clock.isPreview || previewing;
   const state = getNowState(day, clock.minuteOfDay);
   const mine = sessionsFor(coaching, myEmail);
   // The student's coaching on the day shown. On the day itself, finished sessions drop off; in a preview,
@@ -38,7 +42,12 @@ export default function NowScreen() {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <EventPicker />
-      <PreviewClock />
+      {showLive ? <PreviewClock /> : null}
+      {clock.isPreview && previewing ? (
+        <Pressable onPress={() => setPreviewing(false)}>
+          <Text style={styles.link}>Done previewing</Text>
+        </Pressable>
+      ) : null}
       {!clock.isPreview ? <Text style={styles.clock}>{formatTime(fromMinutes(clock.minuteOfDay))}</Text> : null}
 
       {myCoaching ? (
@@ -73,7 +82,9 @@ export default function NowScreen() {
         </Pressable>
       ) : null}
 
-      {state.dayOver ? (
+      {!showLive ? (
+        <DayAhead eventName={event.name} dayLabel={day.label} date={day.date} items={day.items} onPreview={() => setPreviewing(true)} />
+      ) : state.dayOver ? (
         <Card label="Day complete" title="That's a wrap" subtitle="See you next session!" />
       ) : state.onTrack ? (
         <Card
@@ -86,7 +97,7 @@ export default function NowScreen() {
         <Card label="On track now" title="Track is quiet" subtitle="Nothing on track right now" />
       )}
 
-      {state.upNext ? (
+      {showLive && state.upNext ? (
         <Card
           label="Up next"
           item={state.upNext}
@@ -94,10 +105,34 @@ export default function NowScreen() {
         />
       ) : null}
 
-      {state.offTrack.map((item) => (
+      {(showLive ? state.offTrack : []).map((item) => (
         <Card key={item.id} label="Also happening" item={item} subtitle={`Until ${formatTime(item.end)}`} />
       ))}
     </ScrollView>
+  );
+}
+
+/** Shown instead of the live cards when the selected day isn't today. */
+function DayAhead(props: { eventName: string; dayLabel: string; date: string; items: ScheduleItem[]; onPreview: () => void }) {
+  const days = daysBetween(todayISO(), props.date);
+  const first = sortItems(props.items)[0];
+  const when = days === 1 ? 'Tomorrow' : days > 1 ? `In ${days} days` : 'This day has passed';
+  return (
+    <>
+      <Card
+        label={days > 0 ? 'Next event' : 'Past event'}
+        title={props.eventName}
+        time={`${props.dayLabel}, ${shortDate(props.date)}${first ? ` · starts ${formatTime(first.start)} with ${first.title}` : ''}`}
+        subtitle={when}
+        highlight={days > 0}
+      />
+      {props.items.length ? (
+        <Pressable onPress={props.onPreview} style={styles.previewBtn}>
+          <Text style={styles.previewBtnText}>Preview the day</Text>
+          <Text style={styles.previewBtnSub}>See what this screen will show on the day, at any time</Text>
+        </Pressable>
+      ) : null}
+    </>
   );
 }
 
@@ -157,4 +192,8 @@ const styles = StyleSheet.create({
   cardTime: { color: colors.muted, fontSize: 15, marginTop: 4 },
   cardSub: { color: colors.accent, fontSize: 16, fontWeight: '600', marginTop: 8 },
   cardSubBig: { fontSize: 22, fontVariant: ['tabular-nums'] },
+  link: { color: colors.accent, fontWeight: '600', textAlign: 'center', marginBottom: 8 },
+  previewBtn: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+  previewBtnText: { color: colors.text, fontSize: 16, fontWeight: '600' },
+  previewBtnSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
 });

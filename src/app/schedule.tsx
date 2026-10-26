@@ -3,7 +3,6 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { EventPicker } from '@/components/EventPicker';
 import { ItemRow } from '@/components/ItemRow';
 import { LoadingOrError } from '@/components/LoadingOrError';
-import { PreviewClock } from '@/components/PreviewClock';
 import { colors } from '@/components/theme';
 import { isCoachOf, sessionsFor } from '@/lib/coaching';
 import { useSchedule } from '@/lib/ScheduleStore';
@@ -32,10 +31,16 @@ export default function ScheduleScreen() {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <EventPicker />
-      <PreviewClock />
       <Text style={styles.hint}>Indented items happen off track, alongside the sessions.</Text>
       {sortItems(day.items).map((item) => {
-        const status = toMinutes(item.end) <= now ? 'past' : toMinutes(item.start) <= now ? 'now' : 'future';
+        // Only the event day itself marks sessions as finished or NOW; other days show plainly.
+        const status = clock.isPreview
+          ? 'future'
+          : toMinutes(item.end) <= now
+          ? 'past'
+          : toMinutes(item.start) <= now
+          ? 'now'
+          : 'future';
         return (
           <ItemRow
             key={item.id}

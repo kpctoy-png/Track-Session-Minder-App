@@ -72,6 +72,13 @@ function findToday(events: TrackEvent[], now: Date) {
   return null;
 }
 
+/** The soonest event that still has a day today or later. */
+function findUpcoming(events: TrackEvent[], now: Date) {
+  const today = todayISO(now);
+  const start = (e: TrackEvent) => e.days.find((d) => d.date >= today)?.date;
+  return events.filter(start).sort((a, b) => start(a)!.localeCompare(start(b)!))[0];
+}
+
 interface DayRow {
   id: string;
   event_id: string;
@@ -257,7 +264,8 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
 
   const todays = events.length ? findToday(events, now) : null;
   const loaded = sync.status === 'live' || sync.status === 'offline';
-  const event = events.find((e) => e.id === eventId) ?? todays?.event ?? events[0] ?? (loaded ? NO_EVENT : undefined);
+  const event =
+    events.find((e) => e.id === eventId) ?? todays?.event ?? findUpcoming(events, now) ?? events[0] ?? (loaded ? NO_EVENT : undefined);
   const day = event?.days.find((d) => d.id === dayId) ?? (todays?.event.id === event?.id ? todays?.day : undefined) ?? event?.days[0];
   const isLive = !!day && todays?.day.id === day.id;
 
