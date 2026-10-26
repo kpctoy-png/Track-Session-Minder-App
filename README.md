@@ -76,6 +76,22 @@ account as the sign-in emails. One-time setup in the Supabase dashboard:
 
 No dashboard webhook is needed (creating one as well would send every email twice).
 
+### Phone alerts
+
+Drivers using the web version can tap Turn on alerts (bottom of the Now tab) to
+get a phone notification when their event's schedule is changed in Admin. On
+iPhone this needs the home screen app (iOS 16.4+). It is sent by the Edge
+Function in `supabase/functions/push-schedule`. One-time setup:
+
+1. Run `supabase/setup.sql` again. It adds the alert tables.
+2. Edge Functions → Deploy a new function → Via Editor. Name it
+   `push-schedule`, replace the sample code with
+   `supabase/functions/push-schedule/index.ts`, and click Deploy. Then open
+   its Details and turn **Verify JWT** off (the function checks the organizer's
+   sign-in itself).
+3. Sign in to Admin once. That makes the alert keys; until then the alerts
+   card stays hidden. No secrets to add.
+
 ### Feedback
 
 Drivers rate an event or the app from 1 to 5 stars, with an optional comment,

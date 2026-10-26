@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AlertsCard } from '@/components/AlertsCard';
 import { ClubLogo, hasClubLogo } from '@/components/ClubLogo';
 import { EventPicker } from '@/components/EventPicker';
 import { LoadingOrError } from '@/components/LoadingOrError';
@@ -116,6 +117,8 @@ export default function NowScreen() {
       {(showLive ? state.offTrack : []).map((item) => (
         <Card key={item.id} label="Also happening" item={item} subtitle={`Until ${formatTime(item.end)}`} />
       ))}
+
+      <AlertsCard />
     </ScrollView>
   );
 }

@@ -42,6 +42,15 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
         </Body>
       </Section>
 
+      <Section title="Get an alert when the schedule changes">
+        <Body>
+          At the bottom of the Now tab, tap Turn on alerts and allow notifications. When the organizers change your
+          event's times, your phone shows an alert, even when the app is closed. Alerts follow one event at a time.
+        </Body>
+        <Step>iPhone: alerts only work in the home screen app (iOS 16.4 or newer), so add it there first.</Step>
+        <Step>To stop them, tap Turn off on the same card.</Step>
+      </Section>
+
       <Section title="Schedule tab: the whole day">
         <Body>
           Every session in order. On the event day, the current one is outlined and says NOW, and finished ones fade out. Indented items
