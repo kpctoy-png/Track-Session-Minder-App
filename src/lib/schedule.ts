@@ -74,3 +74,55 @@ export function countdown(fromMinute: number, toHHMM: string, seconds = 0): stri
   if (h > 0) return `${h}h ${m}m`;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+/** Track sessions that haven't started by `fromMinute`: the ones a trim may shorten. */
+export function trimmableSessions(items: ScheduleItem[], fromMinute: number): ScheduleItem[] {
+  return sortItems(items).filter((i) => i.kind === 'track' && toMinutes(i.start) >= fromMinute);
+}
+
+/**
+ * Shortens upcoming track sessions by `cuts[id]` minutes each and pulls everything after them earlier by the
+ * time saved so far, so there are no gaps. Classroom, lunch and meetings keep their length.
+ */
+export function trimSchedule(items: ScheduleItem[], fromMinute: number, cuts: Record<string, number>): ScheduleItem[] {
+  // Each trimmed session saves its cut from its original end onwards.
+  const savings = trimmableSessions(items, fromMinute)
+    .filter((i) => cuts[i.id] > 0)
+    .map((i) => ({ at: toMinutes(i.end), cut: cuts[i.id] }));
+  const savedBy = (minute: number) => savings.reduce((sum, s) => (s.at <= minute ? sum + s.cut : sum), 0);
+  return items.map((item) => {
+    const start = toMinutes(item.start);
+    if (start < fromMinute) return item;
+    const shift = savedBy(start);
+    const cut = item.kind === 'track' ? (cuts[item.id] ?? 0) : 0;
+    return { ...item, start: fromMinutes(start - shift), end: fromMinutes(toMinutes(item.end) - shift - cut) };
+  });
+}
+
+/** Never trim a session below this many minutes. */
+export const MIN_SESSION_MINUTES = 10;
+
+/**
+ * Spreads `minutes` as evenly as possible over the upcoming track sessions, in whole minutes, without taking any
+ * session below MIN_SESSION_MINUTES. Returns the cut per session id; their sum can be less than asked if the
+ * sessions are already short.
+ */
+export function spreadCatchUp(items: ScheduleItem[], fromMinute: number, minutes: number): Record<string, number> {
+  const sessions = trimmableSessions(items, fromMinute);
+  const room = Object.fromEntries(
+    sessions.map((s) => [s.id, Math.max(0, toMinutes(s.end) - toMinutes(s.start) - MIN_SESSION_MINUTES)]),
+  );
+  const cuts: Record<string, number> = Object.fromEntries(sessions.map((s) => [s.id, 0]));
+  let left = minutes;
+  // Hand out one minute at a time, earliest sessions first, skipping any that are at their minimum.
+  while (left > 0) {
+    const open = sessions.filter((s) => cuts[s.id] < room[s.id]);
+    if (!open.length) break;
+    for (const s of open) {
+      if (left === 0) break;
+      cuts[s.id]++;
+      left--;
+    }
+  }
+  return cuts;
+}
