@@ -15,7 +15,7 @@ interface Signup {
 }
 
 /** Drivers who joined this club's list from the Now tab, with a spreadsheet download. */
-export function SignupsAdmin({ clubId, clubName }: { clubId: string; clubName: string }) {
+export function SignupsAdmin({ clubId }: { clubId: string }) {
   const { events } = useSchedule();
   const [rows, setRows] = useState<Signup[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +67,6 @@ export function SignupsAdmin({ clubId, clubName }: { clubId: string; clubName: s
 
   return (
     <View>
-      <Text style={styles.heading}>{clubName} driver list</Text>
       <Text style={styles.sub}>Drivers who chose "Join the list" on the Now tab and agreed to be emailed.</Text>
       {error ? (
         <Text style={styles.sub}>Couldn't load the list: {error}</Text>

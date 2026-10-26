@@ -8,7 +8,7 @@ import { useSchedule } from '@/lib/ScheduleStore';
 import { colors } from './theme';
 
 /** Average rating and comments for one event, or for the app when eventId is null. */
-export function FeedbackAdmin({ eventId, title }: { eventId: string | null; title: string }) {
+export function FeedbackAdmin({ eventId }: { eventId: string | null }) {
   const { loadFeedback } = useSchedule();
   // The store rebuilds loadFeedback every second with the clock, so read the latest one through a ref.
   const load = useRef(loadFeedback);
@@ -35,7 +35,6 @@ export function FeedbackAdmin({ eventId, title }: { eventId: string | null; titl
 
   return (
     <View>
-      <Text style={styles.heading}>{title}</Text>
       {error ? (
         <Text style={styles.sub}>Couldn't load feedback: {error}</Text>
       ) : !entries ? (

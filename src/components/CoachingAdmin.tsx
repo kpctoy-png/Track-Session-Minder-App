@@ -19,6 +19,8 @@ export function CoachingAdmin() {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Removing sends the student and instructor an email and an alert, so it waits for a second tap.
+  const [removing, setRemoving] = useState<string | null>(null);
 
   const booked = coaching
     .filter((c) => c.dayId === day.id)
@@ -65,13 +67,13 @@ export function CoachingAdmin() {
 
   return (
     <View>
-      <Text style={styles.heading}>Coaching and check rides</Text>
       <Text style={styles.sub}>
         Book a paid coaching session or a check ride for one student. The student and instructor each get an email, and see
         it in the app after signing in on the My Day tab. Nobody can be booked twice at the same time.
       </Text>
       {booked.map(({ session, start, end }) => (
-        <View key={session.id} style={styles.row}>
+        <View key={session.id}>
+        <View style={styles.row}>
           <View style={styles.rowBody}>
             <Text style={styles.rowTime}>{formatRange({ start, end })}</Text>
             <Text style={styles.rowTitle}>{session.studentEmail}</Text>
@@ -81,12 +83,35 @@ export function CoachingAdmin() {
             </Text>
           </View>
           <Pressable
-            onPress={async () => setError(await removeCoaching(session.id))}
+            onPress={() => setRemoving(removing === session.id ? null : session.id)}
             style={styles.remove}
             accessibilityLabel={`Remove ${bookingName(session.kind).toLowerCase()} for ${session.studentEmail}`}
           >
             <Text style={styles.removeText}>Remove</Text>
           </Pressable>
+        </View>
+        {removing === session.id ? (
+          <View style={styles.confirm}>
+            <Text style={styles.confirmText}>
+              Cancel this {bookingName(session.kind).toLowerCase()} for {session.studentEmail}? They (and the instructor) get a
+              cancellation email and alert.
+            </Text>
+            <View style={styles.actions}>
+              <Pressable
+                onPress={async () => {
+                  setRemoving(null);
+                  setError(await removeCoaching(session.id));
+                }}
+                style={[styles.btn, styles.btnDanger]}
+              >
+                <Text style={styles.btnText}>Yes, cancel it</Text>
+              </Pressable>
+              <Pressable onPress={() => setRemoving(null)} style={styles.btn}>
+                <Text style={styles.btnText}>Keep it</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         </View>
       ))}
 
@@ -192,4 +217,7 @@ const styles = StyleSheet.create({
   btnText: { color: colors.text, fontWeight: '600' },
   btnTextPrimary: { color: '#000' },
   addBtn: { alignSelf: 'flex-start' },
+  btnDanger: { borderColor: '#FF453A' },
+  confirm: { borderWidth: 2, borderColor: '#FF453A', borderRadius: 12, padding: 12, marginBottom: 8, gap: 10 },
+  confirmText: { color: colors.text, fontSize: 15, fontWeight: '600' },
 });
