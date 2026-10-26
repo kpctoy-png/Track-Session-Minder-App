@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ClubLogo, hasClubLogo } from '@/components/ClubLogo';
 import { EventPicker } from '@/components/EventPicker';
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { PreviewClock } from '@/components/PreviewClock';
 import { ItemTitle } from '@/components/ItemTitle';
 import { colors, itemColors } from '@/components/theme';
-import type { ScheduleItem } from '@/data/types';
+import type { Club, ScheduleItem } from '@/data/types';
 import { bookingName, coachingTimes, coachingTitle, sessionsFor } from '@/lib/coaching';
 import { daysBetween, shortDate, todayISO } from '@/lib/dates';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { countdown, formatRange, formatTime, fromMinutes, getNowState, sortItems, toMinutes } from '@/lib/schedule';
 
 export default function NowScreen() {
-  const { events, event, day, clock, hasEvents, coaching, myEmail, selectEvent, selectDay } = useSchedule();
+  const { clubs, events, event, day, clock, hasEvents, coaching, myEmail, selectEvent, selectDay } = useSchedule();
   // On days without an event, the live cards would describe another day; they only show when asked for.
   const [previewing, setPreviewing] = useState(false);
   if (!hasEvents) return <LoadingOrError status="live" />;
@@ -83,7 +84,14 @@ export default function NowScreen() {
       ) : null}
 
       {!showLive ? (
-        <DayAhead eventName={event.name} dayLabel={day.label} date={day.date} items={day.items} onPreview={() => setPreviewing(true)} />
+        <DayAhead
+          eventName={event.name}
+          club={clubs.find((c) => c.id === event.clubId)}
+          dayLabel={day.label}
+          date={day.date}
+          items={day.items}
+          onPreview={() => setPreviewing(true)}
+        />
       ) : state.dayOver ? (
         <Card label="Day complete" title="That's a wrap" subtitle="See you next session!" />
       ) : state.onTrack ? (
@@ -113,7 +121,7 @@ export default function NowScreen() {
 }
 
 /** Shown instead of the live cards when the selected day isn't today. */
-function DayAhead(props: { eventName: string; dayLabel: string; date: string; items: ScheduleItem[]; onPreview: () => void }) {
+function DayAhead(props: { eventName: string; club?: Club; dayLabel: string; date: string; items: ScheduleItem[]; onPreview: () => void }) {
   const days = daysBetween(todayISO(), props.date);
   const first = sortItems(props.items)[0];
   const when = days === 1 ? 'Tomorrow' : days > 1 ? `In ${days} days` : 'This day has passed';
@@ -126,6 +134,15 @@ function DayAhead(props: { eventName: string; dayLabel: string; date: string; it
         subtitle={when}
         highlight={days > 0}
       />
+      {props.club ? (
+        <View style={styles.host}>
+          {hasClubLogo(props.club) ? <ClubLogo club={props.club} height={40} /> : null}
+          <View>
+            <Text style={styles.hostLabel}>Hosted by</Text>
+            <Text style={styles.hostName}>{props.club.name}</Text>
+          </View>
+        </View>
+      ) : null}
       {props.items.length ? (
         <Pressable onPress={props.onPreview} style={styles.previewBtn}>
           <Text style={styles.previewBtnText}>Preview the day</Text>
@@ -193,6 +210,9 @@ const styles = StyleSheet.create({
   cardSub: { color: colors.accent, fontSize: 16, fontWeight: '600', marginTop: 8 },
   cardSubBig: { fontSize: 22, fontVariant: ['tabular-nums'] },
   link: { color: colors.accent, fontWeight: '600', textAlign: 'center', marginBottom: 8 },
+  host: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: 12, padding: 10, marginTop: 8 },
+  hostLabel: { color: colors.muted, fontSize: 12 },
+  hostName: { color: colors.text, fontSize: 15, fontWeight: '700' },
   previewBtn: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginTop: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
   previewBtnText: { color: colors.text, fontSize: 16, fontWeight: '600' },
   previewBtnSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
