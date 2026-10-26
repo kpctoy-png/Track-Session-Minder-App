@@ -332,7 +332,11 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
           // Days are removed with the event (on delete cascade).
           const { data, error } = await supabase.from('events').delete().eq('id', id).select('id');
           if (error) return error.message;
-          if (!data?.length) return 'The event was not deleted. Try signing in again.';
+          if (!data?.length) {
+            // Nothing deleted: either it's already gone (this screen was out of date) or we weren't allowed.
+            const { data: still } = await supabase.from('events').select('id').eq('id', id);
+            if (still?.length) return 'The event was not deleted. Try signing in again.';
+          }
         }
         setEvents((all) => all.filter((e) => e.id !== id));
         setEventId(null);
