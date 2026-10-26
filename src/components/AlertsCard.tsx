@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getAlertsState, turnOffAlerts, turnOnAlerts, type AlertsState } from '@/lib/push';
@@ -12,9 +13,12 @@ export function AlertsCard() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
-  useEffect(() => {
-    getAlertsState().then(setAlerts, () => {});
-  }, []);
+  // Check again each time the Now tab is shown, so the card appears as soon as alerts are set up.
+  useFocusEffect(
+    useCallback(() => {
+      getAlertsState().then(setAlerts, () => {});
+    }, []),
+  );
 
   const turnOn = async () => {
     setBusy(true);
