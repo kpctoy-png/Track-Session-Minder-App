@@ -281,6 +281,49 @@ create policy "Admins remove feedback" on feedback for delete to authenticated
   using (case when event_id is null then is_platform_admin()
               else can_manage_club((select club_id from events where events.id = event_id)) end);
 
+-- Phone alerts (web push). Drivers turn alerts on for one event; when an
+-- organizer changes that event's schedule, the push-schedule Edge Function
+-- alerts every phone signed up for it. The app never reads these tables
+-- directly: drivers use the functions below, and only the Edge Function (with
+-- the service role) reads the subscriptions and keys.
+create table if not exists push_config (
+  id int primary key default 1 check (id = 1),
+  public_key text not null,
+  public_jwk jsonb not null,
+  private_jwk jsonb not null
+);
+alter table push_config enable row level security;
+
+create table if not exists push_subscriptions (
+  endpoint text primary key check (endpoint like 'https://%' and length(endpoint) <= 1000),
+  p256dh text not null check (length(p256dh) <= 200),
+  auth text not null check (length(auth) <= 100),
+  event_id text not null references events (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table push_subscriptions enable row level security;
+
+-- Null until the Edge Function has made its keys (an organizer opening Admin does that).
+create or replace function push_public_key() returns text
+  language sql stable security definer set search_path = public as $$
+  select public_key from push_config where id = 1;
+$$;
+
+-- One event per phone: signing up again moves the phone's alerts to the new event.
+create or replace function subscribe_push(sub_endpoint text, sub_p256dh text, sub_auth text, sub_event text) returns void
+  language sql security definer set search_path = public as $$
+  insert into push_subscriptions (endpoint, p256dh, auth, event_id)
+  values (sub_endpoint, sub_p256dh, sub_auth, sub_event)
+  on conflict (endpoint) do update set p256dh = excluded.p256dh, auth = excluded.auth, event_id = excluded.event_id;
+$$;
+
+create or replace function unsubscribe_push(sub_endpoint text) returns void
+  language sql security definer set search_path = public as $$
+  delete from push_subscriptions where endpoint = sub_endpoint;
+$$;
+
+grant execute on function push_public_key(), subscribe_push(text, text, text, text), unsubscribe_push(text) to anon, authenticated;
+
 -- Send changes to phones as they happen.
 do $$
 begin

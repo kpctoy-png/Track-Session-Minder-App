@@ -13,6 +13,7 @@ import { SheetImportForm } from '@/components/SheetImportForm';
 import { PreviewClock } from '@/components/PreviewClock';
 import { colors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
+import { alertDrivers, setUpAlerts } from '@/lib/push';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { formatRange, formatTime, fromMinutes, shiftSchedule, sortItems, spreadCatchUp, toMinutes, trimSchedule } from '@/lib/schedule';
 import { supabase } from '@/lib/supabase';
@@ -41,6 +42,11 @@ export default function AdminScreen() {
     setPending(null);
   }, [day.id]);
 
+  // Organizers opening Admin make sure phone alerts are ready for drivers to turn on.
+  useEffect(() => {
+    if (editable) setUpAlerts();
+  }, [editable]);
+
   useEffect(() => {
     if (!saved) return;
     const timer = setTimeout(() => setSaved(null), 4000);
@@ -63,7 +69,10 @@ export default function AdminScreen() {
 
   const save = async (dayId: string, next: ScheduleItem[], what: string) => {
     setSaved(null);
-    if (await updateDay(dayId, next)) setSaved({ text: `✓ ${what} · sent to drivers`, at: Date.now() });
+    if (!(await updateDay(dayId, next))) return;
+    setSaved({ text: `✓ ${what} · sent to drivers`, at: Date.now() });
+    const dayLabel = event.days.find((d) => d.id === dayId)?.label;
+    alertDrivers(event.id, `${dayLabel && event.days.length > 1 ? `${dayLabel}: ` : ''}${what}. Tap to see the new times.`);
   };
 
   const runLate = (minutes: number) =>
