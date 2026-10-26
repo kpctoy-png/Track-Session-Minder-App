@@ -36,12 +36,15 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
         <Step>The big card at the top shows which group is on track right now and how much time is left.</Step>
         <Step>“Up next” shows the next group and a countdown, so you know when to head to the grid.</Step>
         <Step>“Also happening” lists classroom sessions and breaks that run at the same time.</Step>
-        <Body>Before the event day, the Now tab shows a preview of the day. Use the “−15” and “+15” buttons to step through it.</Body>
+        <Body>
+          Before the event day, the Now tab shows when your next event starts. Tap “Preview the day” to see what it
+          will look like, and use the “−15” and “+15” buttons to step through it.
+        </Body>
       </Section>
 
       <Section title="Schedule tab: the whole day">
         <Body>
-          Every session in order. The current one is outlined and says NOW, and finished ones fade out. Indented items
+          Every session in order. On the event day, the current one is outlined and says NOW, and finished ones fade out. Indented items
           happen off track (classroom, meetings).
         </Body>
         <Text style={styles.subheading}>Run group colors</Text>
