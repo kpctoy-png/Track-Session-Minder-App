@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AlertsCard } from '@/components/AlertsCard';
 import { ClubLogo, hasClubLogo } from '@/components/ClubLogo';
+import { JoinListCard } from '@/components/JoinListCard';
 import { EventPicker } from '@/components/EventPicker';
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { PreviewClock } from '@/components/PreviewClock';
@@ -119,6 +120,7 @@ export default function NowScreen() {
       ))}
 
       <AlertsCard />
+      <JoinListCard />
     </ScrollView>
   );
 }

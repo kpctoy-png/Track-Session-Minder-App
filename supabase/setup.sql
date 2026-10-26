@@ -324,6 +324,36 @@ $$;
 
 grant execute on function push_public_key(), subscribe_push(text, text, text, text), unsubscribe_push(text) to anon, authenticated;
 
+-- Drivers who chose to join a club's list from the Now tab ("Stay in the loop"),
+-- agreeing that the club may email them. Each club sees only its own list.
+-- Drivers add themselves through join_driver_list, which can't read the list back.
+create table if not exists driver_signups (
+  club_id text not null references clubs (id) on delete cascade,
+  email text not null check (email = lower(trim(email)) and email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' and length(email) <= 254),
+  name text not null check (length(trim(name)) between 1 and 100),
+  event_id text references events (id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (club_id, email)
+);
+alter table driver_signups enable row level security;
+
+drop policy if exists "Organizers read their sign-ups" on driver_signups;
+create policy "Organizers read their sign-ups" on driver_signups for select to authenticated
+  using (can_manage_club(club_id));
+drop policy if exists "Organizers remove sign-ups" on driver_signups;
+create policy "Organizers remove sign-ups" on driver_signups for delete to authenticated
+  using (can_manage_club(club_id));
+
+-- Joining again with the same email just updates the name.
+create or replace function join_driver_list(signup_name text, signup_email text, signup_event text) returns void
+  language sql security definer set search_path = public as $$
+  insert into driver_signups (club_id, email, name, event_id)
+  select club_id, lower(trim(signup_email)), trim(signup_name), id from events where id = signup_event
+  on conflict (club_id, email) do update set name = excluded.name, event_id = excluded.event_id;
+$$;
+
+grant execute on function join_driver_list(text, text, text) to anon, authenticated;
+
 -- Send changes to phones as they happen.
 do $$
 begin

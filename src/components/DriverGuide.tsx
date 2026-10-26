@@ -74,6 +74,13 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
         </Body>
       </Section>
 
+      <Section title="Stay in the loop">
+        <Body>
+          Want to hear about a club's upcoming events? Leave your name and email on the card at the bottom of the Now
+          tab. It's optional, and only that club sees it.
+        </Body>
+      </Section>
+
       <Section title="Tell us how it went">
         <Body>On the My Day tab, tap Rate an event or the app to leave 1 to 5 stars and a comment. No sign-in needed.</Body>
       </Section>
