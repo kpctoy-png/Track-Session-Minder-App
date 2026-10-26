@@ -14,7 +14,7 @@ import { PreviewClock } from '@/components/PreviewClock';
 import { colors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
 import { useSchedule } from '@/lib/ScheduleStore';
-import { formatTime, fromMinutes, shiftSchedule, sortItems, spreadCatchUp, toMinutes, trimSchedule } from '@/lib/schedule';
+import { formatRange, formatTime, fromMinutes, shiftSchedule, sortItems, spreadCatchUp, toMinutes, trimSchedule } from '@/lib/schedule';
 import { supabase } from '@/lib/supabase';
 
 export default function AdminScreen() {
@@ -26,12 +26,20 @@ export default function AdminScreen() {
   const [catchUpNote, setCatchUpNote] = useState<{ text: string; undo?: { dayId: string; items: ScheduleItem[] } } | null>(null);
   const navigation = useNavigation();
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Brief confirmation once a change has reached drivers.
+  const [saved, setSaved] = useState<{ text: string; at: number } | null>(null);
   const items = sortItems(day.items);
   const editable = hasEvents && canManage(event.clubId);
   const clubName = clubs.find((c) => c.id === event.clubId)?.name ?? 'This club';
 
   // A catch-up note (and its Undo) only applies to the day it was made on.
   useEffect(() => setCatchUpNote(null), [day.id]);
+
+  useEffect(() => {
+    if (!saved) return;
+    const timer = setTimeout(() => setSaved(null), 4000);
+    return () => clearTimeout(timer);
+  }, [saved]);
 
   // Tapping the Admin tab again always brings back the dashboard.
   useEffect(
@@ -47,7 +55,17 @@ export default function AdminScreen() {
   if (creating) return <NewEventForm onDone={() => setCreating(false)} />;
   if (importing) return <SheetImportForm onDone={() => setImporting(false)} />;
 
-  const runLate = (minutes: number) => updateDay(day.id, shiftSchedule(items, clock.minuteOfDay, minutes));
+  const save = async (dayId: string, next: ScheduleItem[], what: string) => {
+    setSaved(null);
+    if (await updateDay(dayId, next)) setSaved({ text: `✓ ${what} · sent to drivers`, at: Date.now() });
+  };
+
+  const runLate = (minutes: number) =>
+    save(
+      day.id,
+      shiftSchedule(items, clock.minuteOfDay, minutes),
+      minutes > 0 ? `Moved ${minutes} min later` : `Moved ${-minutes} min earlier`,
+    );
 
   // After an incident: shorten the remaining track sessions so the day finishes `minutes` earlier.
   const catchUp = (minutes: number) => {
@@ -63,18 +81,20 @@ export default function AdminScreen() {
       text: `Caught up ${total} min: ${used.length} sessions are ${per} shorter, and the day now ends at ${formatTime(fromMinutes(lastEnd))}.${short}`,
       undo: { dayId: day.id, items: day.items },
     });
-    updateDay(day.id, next);
+    save(day.id, next, `Caught up ${total} min`);
   };
 
-  const editItem = (id: string, change: (item: ScheduleItem) => ScheduleItem | null) =>
-    updateDay(
+  const editItem = (id: string, change: (item: ScheduleItem) => ScheduleItem | null) => {
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    const next = change(item);
+    if (next === item) return;
+    save(
       day.id,
-      items.flatMap((item) => {
-        if (item.id !== id) return [item];
-        const next = change(item);
-        return next ? [next] : [];
-      }),
+      items.flatMap((i) => (i.id !== id ? [i] : next ? [next] : [])),
+      next ? `${next.title} now ${formatRange(next)}` : `${item.title} removed`,
     );
+  };
 
   const nudge = (field: 'start' | 'end', delta: number) => (item: ScheduleItem) => {
     const value = toMinutes(item[field]) + delta;
@@ -84,121 +104,128 @@ export default function AdminScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
-      {supabase ? (
-        <View style={styles.signedIn}>
-          <Text style={styles.signedInText}>Changes go live to every driver. Signed in as {session?.user.email}</Text>
-          <Btn label="Sign out" onPress={() => supabase?.auth.signOut()} />
+    <View style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.page}>
+        {supabase ? (
+          <View style={styles.signedIn}>
+            <Text style={styles.signedInText}>Changes go live to every driver. Signed in as {session?.user.email}</Text>
+            <Btn label="Sign out" onPress={() => supabase?.auth.signOut()} />
+          </View>
+        ) : (
+          <View style={styles.notice}>
+            <Text style={styles.noticeText}>
+              Practice mode: changes here only show on this device. Once the online database is connected, they will
+              update every driver's phone.
+            </Text>
+          </View>
+        )}
+        {sync.status === 'error' ? (
+          <View style={styles.error}>
+            <Text style={styles.errorText}>{sync.message}</Text>
+          </View>
+        ) : null}
+        <View style={styles.eventActions}>
+          {manageableClubs.length ? <Btn label="+ New event" onPress={() => setCreating(true)} primary /> : null}
+          {editable ? <Btn label="Import from Google Sheet" onPress={() => setImporting(true)} /> : null}
+          {!editable ? null : confirmDelete ? (
+            <>
+              <Btn
+                label={`Delete ${event.name}`}
+                danger
+                onPress={async () => {
+                  const problem = await deleteEvent(event.id);
+                  setConfirmDelete(false);
+                  setDeleteError(problem);
+                }}
+              />
+              <Btn label="Keep it" onPress={() => setConfirmDelete(false)} />
+            </>
+          ) : (
+            <Btn label="Delete event" onPress={() => setConfirmDelete(true)} />
+          )}
         </View>
-      ) : (
-        <View style={styles.notice}>
-          <Text style={styles.noticeText}>
-            Practice mode: changes here only show on this device. Once the online database is connected, they will
-            update every driver's phone.
-          </Text>
-        </View>
-      )}
-      {sync.status === 'error' ? (
-        <View style={styles.error}>
-          <Text style={styles.errorText}>{sync.message}</Text>
-        </View>
-      ) : null}
-      <View style={styles.eventActions}>
-        {manageableClubs.length ? <Btn label="+ New event" onPress={() => setCreating(true)} primary /> : null}
-        {editable ? <Btn label="Import from Google Sheet" onPress={() => setImporting(true)} /> : null}
-        {!editable ? null : confirmDelete ? (
+        {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
+        {hasEvents ? <EventPicker /> : null}
+        {hasEvents ? <PreviewClock /> : null}
+
+        {editable ? (
           <>
-            <Btn
-              label={`Delete ${event.name}`}
-              danger
-              onPress={async () => {
-                const problem = await deleteEvent(event.id);
-                setConfirmDelete(false);
-                setDeleteError(problem);
-              }}
-            />
-            <Btn label="Keep it" onPress={() => setConfirmDelete(false)} />
+            <Text style={styles.heading}>Running late?</Text>
+            <Text style={styles.sub}>Shifts everything after {formatTime(fromMinutes(clock.minuteOfDay))}.</Text>
+            <View style={styles.buttons}>
+              {[5, 10, 15, 30, 45, 60].map((m) => (
+                <Btn key={m} label={`+${m} min`} onPress={() => runLate(m)} primary />
+              ))}
+              <Btn label="−5 min" onPress={() => runLate(-5)} />
+            </View>
+
+            <Text style={[styles.heading, styles.sessionsHeading]}>Catch up after an incident</Text>
+            <Text style={styles.sub}>
+              Shortens the track sessions that haven't started yet, spread evenly, so the day ends earlier. Lunch,
+              classroom and meetings keep their length.
+            </Text>
+            <View style={styles.buttons}>
+              {[5, 10, 15, 20, 30].map((m) => (
+                <Btn key={m} label={`Catch up ${m} min`} onPress={() => catchUp(m)} />
+              ))}
+            </View>
+            {catchUpNote ? (
+              <View style={styles.catchUpNote}>
+                <Text style={styles.catchUpText}>{catchUpNote.text}</Text>
+                {catchUpNote.undo ? (
+                  <Btn
+                    label="Undo"
+                    onPress={() => {
+                      const undo = catchUpNote.undo;
+                      if (undo) save(undo.dayId, undo.items, 'Catch-up undone');
+                      setCatchUpNote(null);
+                    }}
+                  />
+                ) : null}
+              </View>
+            ) : null}
+
+            <Text style={[styles.heading, styles.sessionsHeading]}>Sessions</Text>
+            <Text style={styles.sub}>Tap a session to change its times.</Text>
+
+            {items.map((item) => (
+              <View key={item.id}>
+                <Pressable onPress={() => setEditing(editing === item.id ? null : item.id)}>
+                  <ItemRow item={item} />
+                </Pressable>
+                {editing === item.id ? (
+                  <View style={styles.editor}>
+                    <EditLine label="Start" onMinus={() => editItem(item.id, nudge('start', -5))} onPlus={() => editItem(item.id, nudge('start', 5))} />
+                    <EditLine label="End" onMinus={() => editItem(item.id, nudge('end', -5))} onPlus={() => editItem(item.id, nudge('end', 5))} />
+                    <Btn label="Remove session" onPress={() => editItem(item.id, () => null)} danger />
+                  </View>
+                ) : null}
+              </View>
+            ))}
+
+            <CoachingAdmin />
+            <FeedbackAdmin eventId={event.id} title={`Feedback on ${event.name}`} />
           </>
         ) : (
-          <Btn label="Delete event" onPress={() => setConfirmDelete(true)} />
-        )}
-      </View>
-      {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
-      {hasEvents ? <EventPicker /> : null}
-      {hasEvents ? <PreviewClock /> : null}
-
-      {editable ? (
-        <>
-          <Text style={styles.heading}>Running late?</Text>
-          <Text style={styles.sub}>Shifts everything after {formatTime(fromMinutes(clock.minuteOfDay))}.</Text>
-          <View style={styles.buttons}>
-            {[5, 10, 15, 30, 45, 60].map((m) => (
-              <Btn key={m} label={`+${m} min`} onPress={() => runLate(m)} primary />
-            ))}
-            <Btn label="−5 min" onPress={() => runLate(-5)} />
-          </View>
-
-          <Text style={[styles.heading, styles.sessionsHeading]}>Catch up after an incident</Text>
           <Text style={styles.sub}>
-            Shortens the track sessions that haven't started yet, spread evenly, so the day ends earlier. Lunch,
-            classroom and meetings keep their length.
+            {!hasEvents
+              ? manageableClubs.length
+                ? 'There are no events yet. Tap + New event to add one.'
+                : 'There are no events yet, and this account is not an organizer account.'
+              : manageableClubs.length
+                ? `${clubName} events can only be changed by ${clubName} admins. Choose one of your own events to edit.`
+                : 'This account is not an organizer account, so it can view schedules but not change them.'}
           </Text>
-          <View style={styles.buttons}>
-            {[5, 10, 15, 20, 30].map((m) => (
-              <Btn key={m} label={`Catch up ${m} min`} onPress={() => catchUp(m)} />
-            ))}
-          </View>
-          {catchUpNote ? (
-            <View style={styles.catchUpNote}>
-              <Text style={styles.catchUpText}>{catchUpNote.text}</Text>
-              {catchUpNote.undo ? (
-                <Btn
-                  label="Undo"
-                  onPress={() => {
-                    const undo = catchUpNote.undo;
-                    if (undo) updateDay(undo.dayId, undo.items);
-                    setCatchUpNote(null);
-                  }}
-                />
-              ) : null}
-            </View>
-          ) : null}
-
-          <Text style={[styles.heading, styles.sessionsHeading]}>Sessions</Text>
-          <Text style={styles.sub}>Tap a session to change its times.</Text>
-
-          {items.map((item) => (
-            <View key={item.id}>
-              <Pressable onPress={() => setEditing(editing === item.id ? null : item.id)}>
-                <ItemRow item={item} />
-              </Pressable>
-              {editing === item.id ? (
-                <View style={styles.editor}>
-                  <EditLine label="Start" onMinus={() => editItem(item.id, nudge('start', -5))} onPlus={() => editItem(item.id, nudge('start', 5))} />
-                  <EditLine label="End" onMinus={() => editItem(item.id, nudge('end', -5))} onPlus={() => editItem(item.id, nudge('end', 5))} />
-                  <Btn label="Remove session" onPress={() => editItem(item.id, () => null)} danger />
-                </View>
-              ) : null}
-            </View>
-          ))}
-
-          <CoachingAdmin />
-          <FeedbackAdmin eventId={event.id} title={`Feedback on ${event.name}`} />
-        </>
-      ) : (
-        <Text style={styles.sub}>
-          {!hasEvents
-            ? manageableClubs.length
-              ? 'There are no events yet. Tap + New event to add one.'
-              : 'There are no events yet, and this account is not an organizer account.'
-            : manageableClubs.length
-              ? `${clubName} events can only be changed by ${clubName} admins. Choose one of your own events to edit.`
-              : 'This account is not an organizer account, so it can view schedules but not change them.'}
-        </Text>
-      )}
-      {isPlatformAdmin ? <FeedbackAdmin eventId={null} title="Feedback on the app" /> : null}
-      {isPlatformAdmin && supabase ? <ManageOrganizers /> : null}
-    </ScrollView>
+        )}
+        {isPlatformAdmin ? <FeedbackAdmin eventId={null} title="Feedback on the app" /> : null}
+        {isPlatformAdmin && supabase ? <ManageOrganizers /> : null}
+      </ScrollView>
+      {saved ? (
+        <View style={styles.saved} pointerEvents="none">
+          <Text style={styles.savedText}>{saved.text}</Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -292,6 +319,9 @@ function Btn({ label, onPress, primary, danger }: { label: string; onPress: () =
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  saved: { position: 'absolute', left: 16, right: 16, bottom: 16, backgroundColor: '#1F7A3A', borderRadius: 12, padding: 12, alignItems: 'center' },
+  savedText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', textAlign: 'center' },
   page: { padding: 16, paddingBottom: 40 },
   link: { color: colors.accent, fontWeight: '600', marginTop: 14 },
   notice: { backgroundColor: '#2A2210', borderRadius: 12, padding: 12, marginBottom: 12 },

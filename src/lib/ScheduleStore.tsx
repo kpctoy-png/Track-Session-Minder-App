@@ -33,7 +33,8 @@ interface ScheduleStore {
   day: EventDay;
   selectEvent: (eventId: string) => void;
   selectDay: (dayId: string) => void;
-  updateDay: (dayId: string, items: ScheduleItem[]) => void;
+  /** Resolves true once drivers can see the change (always true in practice mode). */
+  updateDay: (dayId: string, items: ScheduleItem[]) => Promise<boolean>;
   /** Resolves to an error message, or null once the event is saved. */
   createEvent: (event: TrackEvent) => Promise<string | null>;
   deleteEvent: (eventId: string) => Promise<string | null>;
@@ -282,25 +283,20 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         setDayId(null);
       },
       selectDay: setDayId,
-      updateDay: (id, items) => {
+      updateDay: async (id, items) => {
         const sorted = sortItems(items);
         const previous = events;
         setEvents((all) => all.map((e) => ({ ...e, days: e.days.map((d) => (d.id === id ? { ...d, items: sorted } : d)) })));
-        if (!supabase) return;
-        supabase
-          .from('event_days')
-          .update({ items: sorted })
-          .eq('id', id)
-          .select('id')
-          .then(({ data, error }) => {
-            if (!error && data?.length) return;
-            // Put the old schedule back so the screen matches what drivers see.
-            setEvents(previous);
-            setSync({
-              status: 'error',
-              message: error?.message ?? 'The change was not saved. Try signing in again.',
-            });
-          });
+        if (!supabase) return true;
+        const { data, error } = await supabase.from('event_days').update({ items: sorted }).eq('id', id).select('id');
+        if (!error && data?.length) return true;
+        // Put the old schedule back so the screen matches what drivers see.
+        setEvents(previous);
+        setSync({
+          status: 'error',
+          message: error?.message ?? 'The change was not saved. Try signing in again.',
+        });
+        return false;
       },
       createEvent: async (newEvent) => {
         if (events.some((e) => e.id === newEvent.id)) return 'An event at this track on these dates already exists.';
