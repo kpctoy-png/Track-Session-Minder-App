@@ -5,6 +5,7 @@
 
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AppState } from 'react-native';
 
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { SAMPLE_CLUBS, SAMPLE_EVENTS } from '@/data/sampleEvents';
@@ -197,6 +198,14 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         })
         .catch((err: Error) => !cancelled && setSync({ status: 'error', message: err.message }));
 
+    // Changes made while the connection was down (phone locked, app in the
+    // background, signal lost) aren't replayed, so catch up whenever it's back.
+    const catchUp = () => {
+      reload();
+      fetchCoaching().then((rows) => !cancelled && setCoaching(rows), () => {});
+    };
+    let connections = 0;
+
     reload();
     const channel = client
       .channel('schedule')
@@ -211,7 +220,10 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'coaching_sessions' }, () =>
         fetchCoaching().then(setCoaching, () => {}),
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED' && connections++ > 0) catchUp();
+      });
+    const appState = AppState.addEventListener('change', (state) => state === 'active' && catchUp());
 
     client.auth.getSession().then(({ data }) => !cancelled && setSession(data.session));
     const { data: auth } = client.auth.onAuthStateChange((_event, next) => setSession(next));
@@ -219,6 +231,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       client.removeChannel(channel);
+      appState.remove();
       auth.subscription.unsubscribe();
     };
   }, []);
