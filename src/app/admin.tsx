@@ -10,6 +10,7 @@ import { ItemRow } from '@/components/ItemRow';
 import { ManageOrganizers } from '@/components/ManageOrganizers';
 import { NewEventForm } from '@/components/NewEventForm';
 import { SheetImportForm } from '@/components/SheetImportForm';
+import { SignupsAdmin } from '@/components/SignupsAdmin';
 import { PreviewClock } from '@/components/PreviewClock';
 import { colors } from '@/components/theme';
 import type { ScheduleItem } from '@/data/types';
@@ -240,6 +241,7 @@ export default function AdminScreen() {
 
             <CoachingAdmin />
             <FeedbackAdmin eventId={event.id} title={`Feedback on ${event.name}`} />
+            <SignupsAdmin clubId={event.clubId} clubName={clubName} />
           </>
         ) : (
           <Text style={styles.sub}>

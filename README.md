@@ -92,6 +92,14 @@ Function in `supabase/functions/push-schedule`. One-time setup:
 3. Sign in to Admin once. That makes the alert keys; until then the alerts
    card stays hidden. No secrets to add.
 
+### Driver list
+
+An optional "Stay in the loop" card at the bottom of the Now tab lets drivers
+leave their name and email, agreeing that the event's club may email them.
+Each club's organizers see their own list at the bottom of the Admin tab, can
+remove people, and can download it as a spreadsheet (.csv). Setup: run
+`supabase/setup.sql` again (it adds the `driver_signups` table).
+
 ### Feedback
 
 Drivers rate an event or the app from 1 to 5 stars, with an optional comment,
