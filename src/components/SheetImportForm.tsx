@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { EventDay } from '@/data/types';
-import { formatTime } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
+import { describeDiff, diffDay } from '@/lib/scheduleDiff';
 import { fetchSheetTab, parseScheduleGrid, sheetIdFromLink, type ImportedDay } from '@/lib/sheetImport';
 import { colors } from './theme';
 
@@ -22,6 +22,7 @@ export function SheetImportForm({ onDone }: { onDone: () => void }) {
   const [imported, setImported] = useState<ImportedDay[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     const id = sheetIdFromLink(link);
@@ -43,11 +44,22 @@ export function SheetImportForm({ onDone }: { onDone: () => void }) {
     }
   };
 
-  const matches = imported ? matchDays(imported, event.days) : [];
+  // Compare each day with the sheet first, so only days that really changed are replaced.
+  const stamp = Date.now();
+  const matches = (imported ? matchDays(imported, event.days) : []).map(({ day, source }) => ({
+    day,
+    source,
+    diff: source ? diffDay(day.items, source.items, (n) => `${day.id}-${stamp}-${n}`) : null,
+  }));
+  const changed = matches.filter((m) => m.diff && !m.diff.same);
 
-  const save = () => {
-    for (const { day, source } of matches) {
-      if (source) updateDay(day.id, source.items.map((item, n) => ({ ...item, id: `${day.id}-${Date.now()}-${n}` })));
+  const save = async () => {
+    setSaving(true);
+    for (const { day, diff } of changed) {
+      if (!(await updateDay(day.id, diff!.items))) {
+        setSaving(false);
+        return setError(`${day.label} was not saved. Try signing in again.`);
+      }
     }
     onDone();
   };
@@ -89,22 +101,38 @@ export function SheetImportForm({ onDone }: { onDone: () => void }) {
 
       {imported ? (
         <>
-          {matches.map(({ day, source }) => (
+          {matches.map(({ day, source, diff }) => (
             <View key={day.id} style={styles.preview}>
               <Text style={styles.previewTitle}>
-                {day.label}: {source ? `${source.items.length} sessions from the sheet's ${source.label}` : 'no match, left as is'}
+                {day.label}:{' '}
+                {!source || !diff
+                  ? 'not in the sheet, left as is'
+                  : diff.same
+                    ? `no changes (${source.items.length} sessions match the sheet)`
+                    : `${describeDiff(diff).length} ${describeDiff(diff).length === 1 ? 'change' : 'changes'}`}
               </Text>
-              {source?.items.slice(0, 4).map((item, i) => (
-                <Text key={i} style={styles.previewLine}>
-                  {formatTime(item.start)}  {item.title}
-                </Text>
-              ))}
-              {source && source.items.length > 4 ? <Text style={styles.previewLine}>…</Text> : null}
+              {diff && !diff.same
+                ? describeDiff(diff).map((line, i) => (
+                    <Text key={i} style={[styles.previewLine, line.startsWith('Removed') && styles.removedLine]}>
+                      {line}
+                    </Text>
+                  ))
+                : null}
             </View>
           ))}
-          <Pressable onPress={save} style={styles.save}>
-            <Text style={styles.saveText}>Replace schedule</Text>
-          </Pressable>
+          {changed.length ? (
+            <>
+              <Text style={styles.confirmText}>
+                Replace {changed.map((m) => m.day.label).join(' and ')} with the sheet? Drivers see the new times right away.
+                {changed.some((m) => m.diff!.removed.length) ? ' Removed sessions disappear from the schedule.' : ''}
+              </Text>
+              <Pressable onPress={save} style={styles.save} disabled={saving}>
+                <Text style={styles.saveText}>{saving ? 'Saving…' : `Replace ${changed.length === 1 ? changed[0].day.label : `${changed.length} days`}`}</Text>
+              </Pressable>
+            </>
+          ) : (
+            <Text style={styles.sameText}>✓ The schedule already matches the sheet. Nothing to change.</Text>
+          )}
         </>
       ) : null}
       <Pressable onPress={onDone} style={styles.back}>
@@ -135,7 +163,10 @@ const styles = StyleSheet.create({
   error: { color: '#FF6961', fontSize: 14, marginTop: 12 },
   preview: { backgroundColor: colors.card, borderRadius: 12, padding: 12, marginTop: 12 },
   previewTitle: { color: colors.text, fontWeight: '700', marginBottom: 6 },
-  previewLine: { color: colors.muted, fontSize: 13, fontVariant: ['tabular-nums'] },
+  previewLine: { color: colors.muted, fontSize: 13, fontVariant: ['tabular-nums'], marginBottom: 2 },
+  removedLine: { color: '#FF6961' },
+  confirmText: { color: colors.text, fontSize: 15, fontWeight: '600', marginTop: 16 },
+  sameText: { color: '#34C759', fontSize: 15, fontWeight: '600', marginTop: 16 },
   save: { backgroundColor: colors.accent, borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 20 },
   saveText: { color: '#000', fontSize: 16, fontWeight: '700' },
   back: { alignItems: 'center', padding: 14, marginTop: 8 },
