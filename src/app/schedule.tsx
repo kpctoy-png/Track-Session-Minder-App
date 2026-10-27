@@ -1,5 +1,6 @@
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
+import { AlertsCard } from '@/components/AlertsCard';
 import { EventPicker } from '@/components/EventPicker';
 import { ItemRow } from '@/components/ItemRow';
 import { LoadingOrError } from '@/components/LoadingOrError';
@@ -31,6 +32,7 @@ export default function ScheduleScreen() {
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <EventPicker />
+      <AlertsCard placement="top" />
       <Text style={styles.hint}>Indented items happen off track, alongside the sessions.</Text>
       {sortItems(day.items).map((item) => {
         // Only the event day itself marks sessions as finished or NOW; other days show plainly.
