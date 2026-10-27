@@ -1,4 +1,5 @@
-// Reading a registration site's participant list (for example a ClubReg export) saved as CSV.
+// Reading a registration site's participant list: a CSV, or ClubReg's Report Builder export (an .xls file that
+// is really an HTML table).
 
 export interface RosterRow {
   name: string;
@@ -35,26 +36,46 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim()));
 }
 
+/** The rows of the first HTML table in `text`, as plain-text cells. */
+export function parseHtmlTable(text: string): string[][] {
+  const decode = (s: string) =>
+    s
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .trim();
+  return [...text.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map((row) =>
+    [...row[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((cell) => decode(cell[1])),
+  );
+}
+
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /**
  * The drivers in a participant list: finds the header row with an email column, plus a name column
- * (or first and last name columns). Each email appears once.
+ * (or first and last name columns). Rows whose Status is Cancelled are left out. Each email appears once.
  */
 export function rosterFromCsv(text: string): { rows: RosterRow[]; problem?: string } {
-  const table = parseCsv(text.replace(/^﻿/, ''));
+  const clean = text.replace(/^\uFEFF/, '');
+  const table = /<table/i.test(clean) ? parseHtmlTable(clean) : parseCsv(clean);
   const headerAt = table.findIndex((r) => r.some((c) => /e-?mail/i.test(c)));
-  if (headerAt < 0) return { rows: [], problem: "Couldn't find an Email column. Is this the participant list, saved as CSV?" };
+  if (headerAt < 0) return { rows: [], problem: "Couldn't find an Email column. Is this the participant list (ClubReg export or CSV)?" };
   const header = table[headerAt].map((c) => c.trim().toLowerCase());
   const col = (test: RegExp) => header.findIndex((h) => test.test(h));
   const email = col(/e-?mail/);
   const first = col(/^first/);
   const last = col(/^last/);
   const full = col(/^(full )?name$|^driver( name)?$|^participant( name)?$/);
+  const status = col(/^status$/);
 
   const seen = new Set<string>();
   const rows: RosterRow[] = [];
   for (const r of table.slice(headerAt + 1)) {
+    if (status >= 0 && /cancel/i.test(r[status] ?? '')) continue;
     const address = (r[email] ?? '').trim().toLowerCase();
     if (!EMAIL.test(address) || seen.has(address)) continue;
     seen.add(address);
