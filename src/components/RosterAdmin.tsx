@@ -35,7 +35,7 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
   const pick = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.csv,text/csv,text/plain';
+    input.accept = '.xls,.csv,text/csv,text/plain,text/html';
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
@@ -73,13 +73,14 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
   return (
     <View>
       <Text style={styles.sub}>
-        Upload the participant list from your registration site (for example ClubReg) so announcements can be emailed
-        to everyone at {eventName}, including drivers who haven't opened the app. Save it as CSV first. Only
-        organizers see this list, and it's deleted a week after the event.
+        Upload the participant list so announcements can be emailed to everyone at {eventName}, including drivers who
+        haven't opened the app. In ClubReg: This Event → Reports → Report Builder, tick Email, Export, and upload the
+        file it saves (a CSV from another site works too). Cancelled entries are skipped. Only organizers see this
+        list, and it's deleted a week after the event.
       </Text>
       {Platform.OS === 'web' ? (
         <Pressable onPress={pick} style={styles.btn}>
-          <Text style={styles.btnText}>{rows?.length ? 'Upload a new list (.csv)' : 'Upload participant list (.csv)'}</Text>
+          <Text style={styles.btnText}>{rows?.length ? 'Upload a new list' : 'Upload participant list'}</Text>
         </Pressable>
       ) : null}
       {upload ? (
