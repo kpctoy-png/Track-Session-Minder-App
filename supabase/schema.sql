@@ -494,6 +494,10 @@ create table if not exists event_roster (
   created_at timestamptz not null default now()
 );
 create index if not exists event_roster_event on event_roster (event_id);
+-- Run group as the registration site names it, and how many coaching sessions the driver paid for
+-- (ClubReg's "Advanced Coaching Quantity"), so organizers can see who still needs one booked.
+alter table event_roster add column if not exists run_group text check (length(run_group) <= 60);
+alter table event_roster add column if not exists coaching int not null default 0 check (coaching between 0 and 20);
 alter table event_roster enable row level security;
 
 drop policy if exists "Organizers read their roster" on event_roster;

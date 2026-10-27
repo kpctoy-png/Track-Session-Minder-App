@@ -288,7 +288,7 @@ export default function AdminScreen() {
                 return n ? `${n} booked on ${day.label}` : `None booked on ${day.label}`;
               })()}
             >
-              <CoachingAdmin />
+              <CoachingAdmin rosterVersion={rosterVersion} />
             </Collapsible>
             <Collapsible id="roster" title="Registered drivers" summary="Participant list from ClubReg, for emailing announcements">
               <RosterAdmin eventId={event.id} eventName={event.name} onChange={() => setRosterVersion((v) => v + 1)} />

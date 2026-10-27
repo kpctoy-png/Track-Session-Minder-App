@@ -99,7 +99,11 @@ offer "Also email the N registered drivers", sent by the `push-schedule`
 function (`email` action) through the same Gmail account as the coaching
 emails (`SMTP_USER` / `SMTP_PASS`), 50 per message in Bcc. The list
 (`event_roster`) is visible only to the event's organizers and is deleted a
-week after the event by a `pg_cron` job.
+week after the event by a `pg_cron` job. ClubReg's Report Builder export (an
+`.xls` that is an HTML table) uploads as is; cancelled entries are skipped. If
+it includes Run Group and Advanced Coaching Quantity, Admin → Coaching lists
+who paid for coaching and how many of their sessions are booked, with a Book
+button that fills in the form.
 
 ### Phone alerts
 
