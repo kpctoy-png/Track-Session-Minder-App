@@ -47,6 +47,7 @@ export default function MeScreen() {
   if (supabase && !myEmail)
     return (
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+        <AlertsCard placement="top" />
         {topButtons}
         <EmailCodeSignIn
           heading="Sign in"
@@ -78,6 +79,7 @@ export default function MeScreen() {
         <Text style={styles.signedInText}>Signed in as {myEmail}</Text>
         <Btn label="Sign out" onPress={() => (supabase ? supabase.auth.signOut() : setPracticeEmail(null))} />
       </View>
+      {mine.length ? null : <AlertsCard placement="top" />}
       {topButtons}
 
       <Text style={styles.heading}>Your coaching and check rides</Text>

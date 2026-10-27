@@ -3,12 +3,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getAlertsState, refreshAlerts, turnOffAlerts, turnOnAlerts, unblockSteps, type AlertsState } from '@/lib/push';
+import { todayISO } from '@/lib/dates';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { colors } from './theme';
 
 // Every card on screen re-checks when one of them turns alerts on or off, so the top and bottom cards agree.
 const listeners = new Set<() => void>();
 const alertsChanged = () => listeners.forEach((l) => l());
+// Set while one card is switching off alerts for a finished event, so the others don't do it too.
+let expiring = false;
 
 /**
  * Lets a driver get phone alerts when the selected event's schedule changes (web version only).
@@ -38,6 +41,22 @@ export function AlertsCard({ placement }: { placement: 'top' | 'bottom' | 'booki
     };
   }, []);
 
+  // Alerts end the day after their event, so drivers don't hear about weekends they aren't at. The database
+  // drops them on its own; this tidies up the phone, so the card offers Turn on alerts for the next event.
+  useEffect(() => {
+    if (alerts.state !== 'on' || expiring || !events.length) return;
+    const followed = events.find((e) => e.id === alerts.eventId);
+    const lastDay = followed?.days.reduce((last, d) => (d.date > last ? d.date : last), '');
+    if (followed && lastDay && lastDay >= todayISO()) return;
+    expiring = true;
+    turnOffAlerts()
+      .catch(() => {})
+      .finally(() => {
+        expiring = false;
+        alertsChanged();
+      });
+  }, [alerts, events]);
+
   // Signing in or out on My Day: attach or drop the email, so booking alerts follow who is signed in.
   useEffect(() => {
     refreshAlerts().catch(() => {});
@@ -64,8 +83,9 @@ export function AlertsCard({ placement }: { placement: 'top' | 'bottom' | 'booki
   const elsewhere = alerts.state === 'on' && !onHere ? (events.find((e) => e.id === alerts.eventId)?.name ?? 'another event') : null;
   // Booking reminders reach any phone with alerts on for this email, whichever event it follows.
   if (placement === 'booking' && alerts.state === 'on') return null;
-  if (placement === 'top' && alerts.state === 'on') return null;
-  if (placement === 'bottom' && alerts.state !== 'on') return null;
+  // The top card asks until alerts are on for this event (including "switch them here"); the bottom one shows they're on.
+  if (placement === 'top' && onHere) return null;
+  if (placement === 'bottom' && !onHere) return null;
 
   if (placement === 'booking' && alerts.state === 'off')
     return (

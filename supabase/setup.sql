@@ -406,6 +406,17 @@ select cron.schedule('coaching-reminders', '* * * * *', $cron$
   );
 $cron$);
 
+-- Alerts end the day after their event's last day (track time), so drivers
+-- aren't alerted about weekends they aren't at. The app then offers to turn
+-- them on again for the next event they open.
+select cron.schedule('expire-alerts', '7 * * * *', $cron$
+  delete from public.push_subscriptions s
+  using public.events e
+  where e.id = s.event_id
+    and (select max(d.date) from public.event_days d where d.event_id = e.id)
+        < (now() at time zone coalesce(e.time_zone, 'America/New_York'))::date;
+$cron$);
+
 -- Drivers who chose to join a club's list from the Now tab ("Stay in the loop"),
 -- agreeing that the club may email them. Each club sees only its own list.
 -- Drivers add themselves through join_driver_list, which can't read the list back.
