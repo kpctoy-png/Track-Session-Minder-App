@@ -9,8 +9,8 @@ import { EmailCodeSignIn } from '@/components/EmailCodeSignIn';
 import { FeedbackForm } from '@/components/FeedbackForm';
 import { colors } from '@/components/theme';
 import { bookingName, coachingTimes, coachingTitle, isCoachOf, isEmail, sessionsFor } from '@/lib/coaching';
-import { shortDate } from '@/lib/dates';
-import { formatRange } from '@/lib/schedule';
+import { shortDate, todayISO } from '@/lib/dates';
+import { formatRange, toMinutes } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { supabase } from '@/lib/supabase';
 
@@ -21,6 +21,7 @@ export default function MeScreen() {
   const { guide } = useLocalSearchParams<{ guide?: string }>();
   const [givingFeedback, setGivingFeedback] = useState(false);
   const [readingGuide, setReadingGuide] = useState(guide === '1');
+  const [showDone, setShowDone] = useState(false);
 
   if (givingFeedback) return <FeedbackForm onDone={() => setGivingFeedback(false)} />;
   if (readingGuide) {
@@ -67,13 +68,22 @@ export default function MeScreen() {
       </ScrollView>
     );
 
-  const mine = sessionsFor(coaching, myEmail)
+  // Bookings that have ended drop off: earlier days entirely, and today's once their end time passes
+  // (still there behind "Show finished", in case someone wants to check one).
+  const now = new Date();
+  const today = todayISO(now);
+  const nowMinute = now.getHours() * 60 + now.getMinutes();
+  const all = sessionsFor(coaching, myEmail)
     .flatMap((session) => {
       const event = events.find((e) => e.days.some((d) => d.id === session.dayId));
       const day = event?.days.find((d) => d.id === session.dayId);
       return event && day ? [{ session, event, day, ...coachingTimes(session, day) }] : [];
     })
     .sort((a, b) => (a.day.date + a.start).localeCompare(b.day.date + b.start));
+  const ended = (b: { day: { date: string }; end: string }) =>
+    b.day.date < today || (b.day.date === today && toMinutes(b.end) <= nowMinute);
+  const mine = all.filter((b) => !ended(b));
+  const doneToday = all.filter((b) => ended(b) && b.day.date === today);
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
@@ -87,36 +97,41 @@ export default function MeScreen() {
 
       <Text style={styles.heading}>Your coaching and check rides</Text>
       {mine.length ? <AlertsCard placement="booking" /> : null}
-      {mine.length ? (
-        mine.map(({ session, event, day, start, end }) => (
-          <Pressable
-            key={session.id}
-            style={styles.card}
-            onPress={() => {
-              selectEvent(event.id);
-              selectDay(day.id);
-              router.navigate('/');
-            }}
-          >
-            <Text style={styles.cardLabel}>
-              {event.name.toUpperCase()} · {day.label.toUpperCase()} {shortDate(day.date).toUpperCase()}
-            </Text>
-            <Text style={styles.cardTitle}>
-              {isCoachOf(session, myEmail)
-                ? coachingTitle(session, myEmail)
-                : session.coach
-                ? `${session.kind === 'checkride' ? 'Check ride' : 'Coaching'} with ${session.coach}`
-                : bookingName(session.kind)}
-            </Text>
-            <Text style={styles.cardTime}>{formatRange({ start, end })}</Text>
-            {session.notes ? <Text style={styles.cardNotes}>{session.notes}</Text> : null}
-          </Pressable>
-        ))
-      ) : (
+      {mine.length ? null : (
         <Text style={styles.sub}>
-          Nothing booked yet. When an organizer books coaching or a check ride for {myEmail}, as student or coach, it shows up here and on the Now tab.
+          {doneToday.length ? 'Nothing else coming up. ' : 'Nothing booked yet. '}When an organizer books coaching or a
+          check ride for {myEmail}, as student or coach, it shows up here and on the Now tab.
         </Text>
       )}
+      {[...mine, ...(showDone ? doneToday : [])].map(({ session, event, day, start, end }) => (
+        <Pressable
+          key={session.id}
+          style={[styles.card, ended({ day, end }) && styles.cardDone]}
+          onPress={() => {
+            selectEvent(event.id);
+            selectDay(day.id);
+            router.navigate('/');
+          }}
+        >
+          <Text style={styles.cardLabel}>
+            {event.name.toUpperCase()} · {day.label.toUpperCase()} {shortDate(day.date).toUpperCase()}
+          </Text>
+          <Text style={styles.cardTitle}>
+            {isCoachOf(session, myEmail)
+              ? coachingTitle(session, myEmail)
+              : session.coach
+              ? `${session.kind === 'checkride' ? 'Check ride' : 'Coaching'} with ${session.coach}`
+              : bookingName(session.kind)}
+          </Text>
+          <Text style={styles.cardTime}>{formatRange({ start, end })}</Text>
+          {session.notes ? <Text style={styles.cardNotes}>{session.notes}</Text> : null}
+        </Pressable>
+      ))}
+      {doneToday.length ? (
+        <Pressable onPress={() => setShowDone(!showDone)}>
+          <Text style={styles.doneLink}>{showDone ? 'Hide finished' : `Show ${doneToday.length} finished today`}</Text>
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }
@@ -169,6 +184,8 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 4 },
   cardTime: { color: colors.accent, fontSize: 15, fontWeight: '600', marginTop: 4 },
   cardNotes: { color: colors.muted, fontSize: 14, marginTop: 6 },
+  cardDone: { opacity: 0.45, borderLeftColor: colors.border },
+  doneLink: { color: colors.accent, fontWeight: '600', marginTop: 12 },
   btn: { backgroundColor: colors.cardRaised, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
   btnPrimary: { backgroundColor: colors.accent, borderColor: colors.accent },
   btnText: { color: colors.text, fontWeight: '600' },
