@@ -52,6 +52,7 @@ export default function NowScreen() {
         </Pressable>
       ) : null}
       {!clock.isPreview ? <Text style={styles.clock}>{formatTime(fromMinutes(clock.minuteOfDay))}</Text> : null}
+      <AlertsCard placement="top" />
 
       {myCoaching ? (
         <Card
@@ -119,7 +120,7 @@ export default function NowScreen() {
         <Card key={item.id} label="Also happening" item={item} subtitle={`Until ${formatTime(item.end)}`} />
       ))}
 
-      <AlertsCard />
+      <AlertsCard placement="bottom" />
       <JoinListCard />
     </ScrollView>
   );

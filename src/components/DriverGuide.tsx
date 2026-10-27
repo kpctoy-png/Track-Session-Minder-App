@@ -44,8 +44,9 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
 
       <Section title="Get an alert when the schedule changes">
         <Body>
-          At the bottom of the Now tab, tap Turn on alerts and allow notifications. When the organizers change your
-          event's times, your phone shows an alert, even when the app is closed. Alerts follow one event at a time.
+          Until alerts are on, a Turn on alerts card sits at the top of the Now tab. Tap it and allow notifications.
+          When the organizers change your event's times, your phone shows an alert, even when the app is closed.
+          Alerts follow one event at a time. Each copy of the app on a phone needs alerts turned on separately.
         </Body>
         <Step>iPhone: alerts only work in the home screen app (iOS 16.4 or newer), so add it there first.</Step>
         <Step>To stop them, tap Turn off on the same card.</Step>
@@ -75,7 +76,7 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
           If you've booked a coaching session or check ride, you'll get an email. To see it in the app, open the My Day tab,
           enter that same email, and type the code we email you (no password). Your booking then shows on Now with a
           countdown, on Schedule with a badge, and on My Day. If the day runs late, its time moves too. Turn on alerts
-          (bottom of the Now tab) while signed in, and your phone also tells you when it's booked, changed, moved or
+          (top of the Now tab, or the card on My Day) while signed in, and your phone also tells you when it's booked, changed, moved or
           cancelled, and reminds you 15 minutes before it starts to pair with your instructor.
         </Body>
       </Section>
