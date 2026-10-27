@@ -48,6 +48,7 @@ function AppTabs() {
         name="admin"
         options={{ title: 'Admin', tabBarIcon: icon('✎'), tabBarItemStyle: isAdmin ? undefined : { display: 'none' } }}
       />
+      <Tabs.Screen name="privacy" options={{ title: 'Privacy', headerShown: false, tabBarItemStyle: { display: 'none' } }} />
     </Tabs>
   );
 }
