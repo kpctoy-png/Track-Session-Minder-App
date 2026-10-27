@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { type ComponentRef, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { ScheduleItem } from '@/data/types';
+import { ANNOUNCEMENT_ICONS, announcementText, withIcon } from '@/lib/announcement';
 import { announceToPhones } from '@/lib/push';
 import { activeAnnouncements, useSchedule } from '@/lib/ScheduleStore';
 import { formatRange, shiftSchedule, sortItems, spreadCatchUp, trimSchedule } from '@/lib/schedule';
@@ -42,6 +43,9 @@ export function AnnouncementAdmin({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<Recovery | null>(null);
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  // After an icon is tapped, put the cursor back in the message so the organizer can finish it.
+  const focusMessage = () => setTimeout(() => input.current?.focus(), 0);
 
   const live = activeAnnouncements(announcements, event.id);
   const audience = everyone ? 'every driver, on every event' : `every driver following ${event.name}`;
@@ -77,7 +81,7 @@ export function AnnouncementAdmin({
             ON DRIVERS' SCREENS NOW{a.eventId ? '' : ' · EVERY DRIVER'}
             {a.endsAt ? ` · until ${new Date(a.endsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}
           </Text>
-          <Text style={styles.liveText}>📢 {a.message}</Text>
+          <Text style={styles.liveText}>{announcementText(a.message)}</Text>
           {a.eventId || isPlatformAdmin ? (
             <Btn label="Clear announcement" onPress={() => clear(a.id, a.eventId, a.createdAt)} />
           ) : null}
@@ -103,7 +107,21 @@ export function AnnouncementAdmin({
         For lightning, a red flag or anything drivers must see now. It shows in red at the top of their app and goes
         to phones with alerts on.
       </Text>
+      <View style={[styles.buttons, styles.icons]}>
+        {ANNOUNCEMENT_ICONS.map((i) => (
+          <Btn
+            key={i.label}
+            label={`${i.icon} ${i.label}`}
+            onPress={() => {
+              setMessage((m) => withIcon(m, i.icon, i.starter).slice(0, MAX));
+              focusMessage();
+              setConfirming(false);
+            }}
+          />
+        ))}
+      </View>
       <TextInput
+        ref={input}
         id="announcement-message"
         style={[styles.input, styles.multiline]}
         placeholder="e.g. Lightning in the area. Track closed, stay in your cars."
@@ -137,7 +155,7 @@ export function AnnouncementAdmin({
       {confirming ? (
         <View style={styles.confirm}>
           <Text style={styles.confirmText}>
-            Show this to {audience}, and alert their phones?{'\n\n'}“{message.trim()}”
+            Show this to {audience}, and alert their phones?{'\n\n'}“{announcementText(message.trim())}”
           </Text>
           <View style={styles.buttons}>
             <Btn label={busy ? 'Sending…' : 'Send to drivers'} onPress={() => !busy && send()} primary />
@@ -233,6 +251,7 @@ const styles = StyleSheet.create({
   label: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 10, marginBottom: 6 },
   buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   sendRow: { marginTop: 12 },
+  icons: { marginBottom: 8 },
   minutes: { color: colors.text, fontSize: 16, fontWeight: '700', minWidth: 60, textAlign: 'center' },
   change: { color: colors.text, fontSize: 14, lineHeight: 20 },
   confirm: { borderWidth: 2, borderColor: colors.accent, borderRadius: 12, padding: 12, marginTop: 10, marginBottom: 10, gap: 10 },

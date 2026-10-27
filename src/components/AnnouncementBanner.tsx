@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { announcementText } from '@/lib/announcement';
 import { activeAnnouncements, useSchedule } from '@/lib/ScheduleStore';
 import { formatTime, fromMinutes } from '@/lib/schedule';
 
@@ -15,7 +16,7 @@ export function AnnouncementBanner() {
         const from = a.eventId ? (events.find((e) => e.id === a.eventId)?.name ?? event.name) : 'Track Session Minder';
         return (
           <View key={a.id} style={styles.banner} accessibilityRole="alert">
-            <Text style={styles.message}>📢 {a.message}</Text>
+            <Text style={styles.message}>{announcementText(a.message)}</Text>
             <Text style={styles.meta}>
               {from} · {formatTime(fromMinutes(sent.getHours() * 60 + sent.getMinutes()))}
             </Text>
