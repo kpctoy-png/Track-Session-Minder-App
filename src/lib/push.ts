@@ -66,6 +66,36 @@ async function currentSubscription(): Promise<PushSubscription | null> {
   return (await registration?.pushManager.getSubscription()) ?? null;
 }
 
+/** How to undo a "Block" on this kind of phone. Phones never ask again once alerts are blocked. */
+export function unblockSteps(): string[] {
+  if (Platform.OS !== 'web') return [];
+  const reopen = 'Close the app, open it again, and tap Turn on alerts.';
+  if (isAppleMobile())
+    return [
+      'Open your iPhone Settings, then Notifications.',
+      'Tap Session Minder (the name under its home screen icon) and turn on Allow Notifications.',
+      reopen,
+    ];
+  if (/Android/.test(navigator.userAgent))
+    return isHomeScreenApp()
+      ? [
+          'Press and hold the app icon on your home screen, then tap App info (or ⓘ).',
+          'Tap Notifications and turn them on.',
+          'Still blocked? In Settings, open Apps, then Chrome, then Notifications, and allow them.',
+          reopen,
+        ]
+      : [
+          'Tap the icon just left of the web address (a lock or sliders).',
+          'Tap Permissions (or Site settings), then Notifications, and choose Allow.',
+          'Still blocked? In Settings, open Apps, then Chrome, then Notifications, and allow them.',
+          reopen,
+        ];
+  return [
+    'Click the icon just left of the web address and allow Notifications.',
+    'Reload the page and click Turn on alerts.',
+  ];
+}
+
 export async function getAlertsState(): Promise<AlertsState> {
   if (Platform.OS !== 'web' || !supabase) return { state: 'unsupported' };
   if (isAppleMobile() && !isHomeScreenApp()) return { state: 'add-to-home-screen' };
