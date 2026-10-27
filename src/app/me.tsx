@@ -39,6 +39,9 @@ export default function MeScreen() {
         <Text style={styles.feedbackStars}>★★★★★</Text>
         <Text style={styles.feedbackText}>Rate an event or the app</Text>
       </Pressable>
+      <Pressable onPress={() => router.navigate('/privacy')}>
+        <Text style={styles.privacy}>Privacy: what we collect and why</Text>
+      </Pressable>
     </>
   );
   if (supabase && !myEmail)
@@ -146,6 +149,7 @@ function Btn({ label, onPress, primary }: { label: string; onPress: () => void; 
 }
 
 const styles = StyleSheet.create({
+  privacy: { color: colors.muted, fontSize: 13, textDecorationLine: 'underline', marginBottom: 12 },
   page: { padding: 16, paddingBottom: 40 },
   feedback: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
   feedbackStars: { color: colors.accent, fontSize: 16 },

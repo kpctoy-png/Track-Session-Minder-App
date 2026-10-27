@@ -102,6 +102,14 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
         <Step>Didn't get a code: check your spam folder, then tap Use a different email or send a new code.</Step>
       </Section>
 
+      <Section title="Your information">
+        <Body>
+          Viewing the schedule needs no account. We only keep what you choose to give (like your email to sign in or
+          get alerts), never sell it, and you can ask us to delete it. Tap Privacy on the My Day tab for the details, or
+          email tracksessionminder@gmail.com.
+        </Body>
+      </Section>
+
       <Pressable onPress={onDone} style={styles.button}>
         <Text style={styles.buttonText}>Got it</Text>
       </Pressable>
