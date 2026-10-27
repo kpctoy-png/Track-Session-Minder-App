@@ -5,6 +5,8 @@ import { isEmail } from '@/lib/coaching';
 import { supabase } from '@/lib/supabase';
 import { colors } from './theme';
 
+const SLOW_MS = 6000;
+
 type Props = {
   heading: string;
   intro: string;
@@ -22,20 +24,26 @@ export function EmailCodeSignIn({ heading, intro, emailHint, idPrefix, children 
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [slow, setSlow] = useState(false);
 
   const sendCode = async () => {
-    if (!supabase) return;
+    // A second tap while sending would send another code and cancel the first.
+    if (!supabase || busy) return;
     if (!isEmail(email)) return setError(emailHint);
     setBusy(true);
     setError(null);
+    // The email server can take a while; after a few seconds, say so instead of looking stuck.
+    const timer = setTimeout(() => setSlow(true), SLOW_MS);
     const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true } });
+    clearTimeout(timer);
+    setSlow(false);
     setBusy(false);
     if (error) setError(`Couldn't send the code: ${error.message}`);
     else setSentTo(email.trim());
   };
 
   const verify = async () => {
-    if (!supabase || !sentTo) return;
+    if (!supabase || !sentTo || busy) return;
     setBusy(true);
     setError(null);
     // Pasted codes can carry stray dots or spaces from the email; only the digits count.
@@ -84,6 +92,7 @@ export function EmailCodeSignIn({ heading, intro, emailHint, idPrefix, children 
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Btn label={busy ? 'Sending…' : 'Email me a code'} onPress={sendCode} primary />
+          {slow ? <Text style={styles.sub}>Still sending. The email can take up to a minute, so please keep this screen open.</Text> : null}
         </>
       )}
       {children}
