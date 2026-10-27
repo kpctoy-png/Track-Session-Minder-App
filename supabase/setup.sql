@@ -483,6 +483,36 @@ begin
 exception when duplicate_object then null;
 end $$;
 
+-- Registered drivers for an event, uploaded by its organizers from their
+-- registration site (for example ClubReg), so announcements can be emailed to
+-- everyone at the event. Only the event's organizers can see the list. It is
+-- deleted a week after the event.
+create table if not exists event_roster (
+  id uuid primary key default gen_random_uuid(),
+  event_id text not null references events (id) on delete cascade,
+  name text not null default '' check (length(name) <= 200),
+  email text check (email = lower(trim(email)) and length(email) <= 254),
+  phone text check (length(phone) <= 40),
+  created_at timestamptz not null default now()
+);
+create index if not exists event_roster_event on event_roster (event_id);
+alter table event_roster enable row level security;
+
+drop policy if exists "Organizers read their roster" on event_roster;
+create policy "Organizers read their roster" on event_roster for select to authenticated
+  using (can_announce(event_id));
+drop policy if exists "Organizers add to their roster" on event_roster;
+create policy "Organizers add to their roster" on event_roster for insert to authenticated
+  with check (can_announce(event_id));
+drop policy if exists "Organizers remove from their roster" on event_roster;
+create policy "Organizers remove from their roster" on event_roster for delete to authenticated
+  using (can_announce(event_id));
+
+select cron.schedule('expire-rosters', '17 4 * * *', $cron$
+  delete from public.event_roster r
+  where (select max(d.date) from public.event_days d where d.event_id = r.event_id) < current_date - 7;
+$cron$);
+
 -- Send changes to phones as they happen.
 do $$
 begin

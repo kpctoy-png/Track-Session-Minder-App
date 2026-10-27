@@ -12,11 +12,16 @@
 // "starts in 15 minutes" reminders. Booking alerts reach the phones whose driver turned
 // alerts on while signed in with the student's or instructor's email.
 //
-// No secrets to set: the keys are made here and kept in the push_config table, which
-// only the service role can read. SUPABASE_URL, SUPABASE_ANON_KEY and
-// SUPABASE_SERVICE_ROLE_KEY are provided by Supabase automatically.
+// { action: 'email', eventId, message } emails an announcement to the event's registered
+// drivers (the event_roster list its organizers uploaded), after the same organizer check.
+//
+// The alert keys are made here and kept in the push_config table, which only the service
+// role can read. Emails use the SMTP_USER and SMTP_PASS secrets already set for
+// notify-coaching. SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are
+// provided by Supabase automatically.
 
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import nodemailer from 'npm:nodemailer@6.9.15';
 import * as webpush from 'jsr:@negrel/webpush@0.5.0';
 
 const APP_URL = 'https://kpctoy-png.github.io/Track-Session-Minder-App/';
@@ -249,6 +254,38 @@ async function sendReminders() {
   return reminded;
 }
 
+const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+/**
+ * Emails an announcement to everyone on the event's roster, 50 at a time in Bcc so nobody sees the
+ * others' addresses. Returns how many addresses it went to.
+ */
+async function emailRoster(eventId: string, eventName: string, message: string): Promise<number> {
+  const { data } = await db.from('event_roster').select('email').eq('event_id', eventId).not('email', 'is', null);
+  const emails = [...new Set((data ?? []).map((r) => r.email as string))];
+  if (!emails.length) return 0;
+  const from = Deno.env.get('SMTP_USER');
+  const mailer = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: { user: from, pass: Deno.env.get('SMTP_PASS') },
+  });
+  const html =
+    `<p style="font-size:20px;font-weight:bold">${escape(message)}</p>` +
+    `<p>From the organizers of ${escape(eventName)}. See the latest schedule in ` +
+    `<a href="${APP_URL}">Track Session Minder</a>.</p>`;
+  for (let i = 0; i < emails.length; i += 50)
+    await mailer.sendMail({
+      from: `"${eventName.replace(/["<>]/g, '')} via Track Session Minder" <${from}>`,
+      to: from,
+      bcc: emails.slice(i, i + 50),
+      subject: `${eventName}: ${message.length > 70 ? message.slice(0, 67) + '…' : message}`,
+      html,
+    });
+  return emails.length;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return reply(405, { error: 'POST only' });
@@ -272,6 +309,15 @@ Deno.serve(async (req) => {
       const result = await pushTo(subs ?? [], { title: event.name, body, tag: eventId });
       if (input.dayId) await bookingsMoved(String(input.dayId), event.name);
       return reply(200, result);
+    }
+
+    if (input.action === 'email') {
+      const eventId = String(input.eventId ?? '');
+      const message = String(input.message ?? '').slice(0, 200);
+      const { data: event } = await db.from('events').select('name, club_id').eq('id', eventId).maybeSingle();
+      if (!event || !message.trim()) return reply(400, { error: 'Unknown event or empty message' });
+      if (!(await canManage(req, event.club_id))) return reply(403, { error: 'Not an organizer for this event' });
+      return reply(200, { emailed: await emailRoster(eventId, event.name, message) });
     }
 
     if (input.action === 'booking' || input.action === 'reminders') {
