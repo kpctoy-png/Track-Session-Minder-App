@@ -12,6 +12,7 @@ import { ItemRow } from '@/components/ItemRow';
 import { ManageOrganizers } from '@/components/ManageOrganizers';
 import { NewEventForm } from '@/components/NewEventForm';
 import { SheetImportForm } from '@/components/SheetImportForm';
+import { RosterAdmin } from '@/components/RosterAdmin';
 import { SignupsAdmin } from '@/components/SignupsAdmin';
 import { PreviewClock } from '@/components/PreviewClock';
 import { colors } from '@/components/theme';
@@ -35,6 +36,7 @@ export default function AdminScreen() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // Brief confirmation once a change has reached drivers.
   const [saved, setSaved] = useState<{ text: string; at: number } | null>(null);
+  const [rosterVersion, setRosterVersion] = useState(0);
   const items = sortItems(day.items);
   const editable = hasEvents && canManage(event.clubId);
   const clubName = clubs.find((c) => c.id === event.clubId)?.name ?? 'This club';
@@ -186,6 +188,7 @@ export default function AdminScreen() {
                 isToday={!clock.isPreview}
                 onRecover={({ kind, minutes }) => (kind === 'late' ? runLate(minutes) : catchUp(minutes))}
                 onSent={(text) => setSaved({ text: `✓ ${text}`, at: Date.now() })}
+                rosterVersion={rosterVersion}
               />
             </Collapsible>
             <Collapsible id="late" title="Running late or catching up" summary="Moves or shortens the rest of the day" defaultOpen>
@@ -286,6 +289,9 @@ export default function AdminScreen() {
               })()}
             >
               <CoachingAdmin />
+            </Collapsible>
+            <Collapsible id="roster" title="Registered drivers" summary="Participant list from ClubReg, for emailing announcements">
+              <RosterAdmin eventId={event.id} eventName={event.name} onChange={() => setRosterVersion((v) => v + 1)} />
             </Collapsible>
             <Collapsible id="feedback" title="Feedback" summary={`Ratings and comments on ${event.name}`}>
               <FeedbackAdmin eventId={event.id} />

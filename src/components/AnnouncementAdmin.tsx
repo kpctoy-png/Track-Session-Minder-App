@@ -1,10 +1,11 @@
-import { type ComponentRef, useRef, useState } from 'react';
+import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { ScheduleItem } from '@/data/types';
 import { ANNOUNCEMENT_ICONS, announcementText, withIcon } from '@/lib/announcement';
-import { announceToPhones } from '@/lib/push';
+import { announceToPhones, emailRoster } from '@/lib/push';
 import { activeAnnouncements, useSchedule } from '@/lib/ScheduleStore';
+import { supabase } from '@/lib/supabase';
 import { formatRange, shiftSchedule, sortItems, spreadCatchUp, trimSchedule } from '@/lib/schedule';
 import { colors } from './theme';
 
@@ -28,12 +29,15 @@ export function AnnouncementAdmin({
   isToday,
   onRecover,
   onSent,
+  rosterVersion,
 }: {
   items: ScheduleItem[];
   fromMinute: number;
   isToday: boolean;
   onRecover: (r: Recovery) => void;
   onSent: (text: string) => void;
+  /** Changes when the registered drivers list is uploaded or deleted, to recount it. */
+  rosterVersion: number;
 }) {
   const { event, events, day, announcements, isPlatformAdmin, postAnnouncement, clearAnnouncement } = useSchedule();
   const [message, setMessage] = useState('');
@@ -43,11 +47,24 @@ export function AnnouncementAdmin({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<Recovery | null>(null);
+  const [registered, setRegistered] = useState(0);
+  const [emailToo, setEmailToo] = useState(true);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   // After an icon is tapped, put the cursor back in the message so the organizer can finish it.
   const focusMessage = () => setTimeout(() => input.current?.focus(), 0);
 
+  useEffect(() => {
+    setRegistered(0);
+    supabase
+      ?.from('event_roster')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', event.id)
+      .not('email', 'is', null)
+      .then(({ count }) => setRegistered(count ?? 0));
+  }, [event.id, rosterVersion]);
+
   const live = activeAnnouncements(announcements, event.id);
+  const emailing = !everyone && emailToo && registered > 0;
   const audience = everyone ? 'every driver, on every event' : `every driver following ${event.name}`;
 
   const send = async () => {
@@ -60,7 +77,11 @@ export function AnnouncementAdmin({
     if (error) return setProblem(error);
     announceToPhones(everyone ? events.map((e) => e.id) : [event.id], text);
     setMessage('');
-    onSent('Announcement sent to drivers');
+    if (!emailing) return onSent('Announcement sent to drivers');
+    onSent('Announcement sent to drivers · emailing…');
+    const mail = await emailRoster(event.id, announcementText(text));
+    if (mail.error) setProblem(`Shown in the app, but the email didn't go out: ${mail.error}`);
+    else onSent(`Announcement sent to drivers · emailed ${mail.emailed}`);
   };
 
   const clear = async (id: string, eventId: string | null, createdAt: string) => {
@@ -152,10 +173,25 @@ export function AnnouncementAdmin({
           </View>
         </>
       ) : null}
+      {!everyone && registered > 0 ? (
+        <Pressable
+          onPress={() => {
+            setEmailToo(!emailToo);
+            setConfirming(false);
+          }}
+          style={styles.check}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: emailToo }}
+        >
+          <Text style={styles.checkBox}>{emailToo ? '☑' : '☐'}</Text>
+          <Text style={styles.checkText}>Also email the {registered} registered drivers</Text>
+        </Pressable>
+      ) : null}
       {confirming ? (
         <View style={styles.confirm}>
           <Text style={styles.confirmText}>
-            Show this to {audience}, and alert their phones?{'\n\n'}“{announcementText(message.trim())}”
+            Show this to {audience}
+            {emailing ? `, alert their phones, and email the ${registered} registered drivers?` : ', and alert their phones?'}{'\n\n'}“{announcementText(message.trim())}”
           </Text>
           <View style={styles.buttons}>
             <Btn label={busy ? 'Sending…' : 'Send to drivers'} onPress={() => !busy && send()} primary />
@@ -252,6 +288,9 @@ const styles = StyleSheet.create({
   buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   sendRow: { marginTop: 12 },
   icons: { marginBottom: 8 },
+  check: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  checkBox: { color: colors.accent, fontSize: 22 },
+  checkText: { color: colors.text, fontSize: 15 },
   minutes: { color: colors.text, fontSize: 16, fontWeight: '700', minWidth: 60, textAlign: 'center' },
   change: { color: colors.text, fontSize: 14, lineHeight: 20 },
   confirm: { borderWidth: 2, borderColor: colors.accent, borderRadius: 12, padding: 12, marginTop: 10, marginBottom: 10, gap: 10 },

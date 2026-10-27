@@ -34,6 +34,10 @@ export function PrivacyPolicy({ onDone }: { onDone: () => void }) {
         <Step>
           The club's driver list: your name and email, only if you fill in “Stay in the loop” and tick the box.
         </Step>
+        <Step>
+          Registered drivers: your name and email from the event's registration site (for example ClubReg), uploaded
+          by the club's organizers so they can email you urgent announcements during that event.
+        </Step>
         <Step>Feedback: your star rating, comment, and the name you choose to give.</Step>
         <Step>
           Phone alerts: if you turn them on, the alert address your phone's browser gives us, the event you follow, and
@@ -45,14 +49,17 @@ export function PrivacyPolicy({ onDone }: { onDone: () => void }) {
       <Section title="How it's used">
         <Body>
           To show you the schedule and your bookings, send sign-in codes, booking emails, alerts and 15-minute
-          reminders. A club uses its own driver list to email you about its events.
+          reminders. A club uses its own driver list to email you about its events, and its registered drivers list only to email
+          urgent announcements (lightning, a red flag) during that event.
         </Body>
         <Body>No ads, no tracking or analytics, and we don't sell or rent your information to anyone.</Body>
       </Section>
 
       <Section title="Who can see it">
         <Step>Your bookings: you, your instructor, that club's organizers, and Redline Techniques.</Step>
-        <Step>A club's driver list and feedback: that club's organizers and Redline Techniques.</Step>
+        <Step>
+          A club's driver list, registered drivers and feedback: that club's organizers and Redline Techniques.
+        </Step>
         <Body>
           We rely on a few services to run the app: Supabase stores the data and handles sign-in, Google (Gmail)
           sends our emails, GitHub hosts the app, and your phone's maker (Apple, Google or Mozilla) delivers alerts.
@@ -62,6 +69,7 @@ export function PrivacyPolicy({ onDone }: { onDone: () => void }) {
 
       <Section title="How long we keep it">
         <Step>Bookings and feedback about an event are deleted when the club deletes the event.</Step>
+        <Step>An event's registered drivers list is deleted a week after the event.</Step>
         <Step>Phone alerts stop and are deleted when you tap Turn off or your browser drops them.</Step>
         <Step>Your sign-in email and the driver list stay until you ask us or the club to remove them.</Step>
       </Section>

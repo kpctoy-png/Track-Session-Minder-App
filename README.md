@@ -93,6 +93,14 @@ Clearing it offers to make up the time the track was held (push later or
 shorten sessions), which the organizer reviews before it is sent. Needs the
 `announcements` table from `supabase/schema.sql`.
 
+Organizers can also upload the event's participant list (CSV from ClubReg or
+another registration site) under Admin → Registered drivers. Announcements then
+offer "Also email the N registered drivers", sent by the `push-schedule`
+function (`email` action) through the same Gmail account as the coaching
+emails (`SMTP_USER` / `SMTP_PASS`), 50 per message in Bcc. The list
+(`event_roster`) is visible only to the event's organizers and is deleted a
+week after the event by a `pg_cron` job.
+
 ### Phone alerts
 
 Drivers using the web version can tap Turn on alerts (top of Now, Schedule and My Day

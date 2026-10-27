@@ -182,6 +182,14 @@ export function announceToPhones(eventIds: string[], message: string) {
       .catch(() => {});
 }
 
+/** Emails an announcement to the event's registered drivers. Resolves to how many it went to, or an error. */
+export async function emailRoster(eventId: string, message: string): Promise<{ emailed?: number; error?: string }> {
+  if (!supabase) return { error: 'Not connected' };
+  const { data, error } = await supabase.functions.invoke('push-schedule', { body: { action: 'email', eventId, message } });
+  if (error) return { error: error.message };
+  return { emailed: data?.emailed ?? 0 };
+}
+
 function fromBase64Url(value: string): ArrayBuffer {
   const base64 = (value + '='.repeat((4 - (value.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)).buffer;
