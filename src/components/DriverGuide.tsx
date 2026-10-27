@@ -45,7 +45,8 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
       <Section title="Urgent announcements">
         <Body>
           If the organizers need everyone to know something right away (lightning, a red flag, a track closure), a red
-          message appears at the top of every tab. Phones with alerts on get it as an alert too. It goes away when the
+          message appears at the top of every tab. The icon in front tells you what it's about at a glance (⚡ lightning,
+          🚑 medical, 🚩 red flag, 🌧️ weather, 🛢️ Speedy Dry, 🔥 fire, ⚠️ caution, 🏁 track open). Phones with alerts on get it as an alert too. It goes away when the
           organizers clear it, and any schedule change that follows shows up as usual.
         </Body>
       </Section>

@@ -5,6 +5,7 @@
 
 import { Platform } from 'react-native';
 
+import { announcementText } from './announcement';
 import { supabase } from './supabase';
 
 export type AlertsState =
@@ -176,7 +177,7 @@ export function alertDrivers(eventId: string, dayId: string, body: string) {
 export function announceToPhones(eventIds: string[], message: string) {
   for (const eventId of eventIds)
     supabase?.functions
-      .invoke('push-schedule', { body: { action: 'send', eventId, body: `📢 ${message}` } })
+      .invoke('push-schedule', { body: { action: 'send', eventId, body: announcementText(message) } })
       .then(({ error }) => error && console.warn('Announcement alert not sent:', error.message))
       .catch(() => {});
 }

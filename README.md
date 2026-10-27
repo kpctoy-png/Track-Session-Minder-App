@@ -79,7 +79,8 @@ No dashboard webhook is needed (creating one as well would send every email twic
 ### Announcements
 
 Organizers can put an urgent message (lightning, red flag) in red at the top of
-every driver tab, from Admin → Announcement to drivers. It also goes to phones
+every driver tab, from Admin → Announcement to drivers (one-tap icons such as ⚡
+Lightning or 🚑 Medical go in front of the message). It also goes to phones
 with alerts on for that event. Platform admins can send one to every driver.
 Clearing it offers to make up the time the track was held (push later or
 shorten sessions), which the organizer reviews before it is sent. Needs the
