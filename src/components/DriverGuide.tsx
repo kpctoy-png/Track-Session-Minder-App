@@ -42,6 +42,14 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
         </Body>
       </Section>
 
+      <Section title="Urgent announcements">
+        <Body>
+          If the organizers need everyone to know something right away (lightning, a red flag, a track closure), a red
+          message appears at the top of every tab. Phones with alerts on get it as an alert too. It goes away when the
+          organizers clear it, and any schedule change that follows shows up as usual.
+        </Body>
+      </Section>
+
       <Section title="Get an alert when the schedule changes">
         <Body>
           Until alerts are on, a Turn on alerts card sits at the top of the Now, Schedule and My Day tabs. Tap it and

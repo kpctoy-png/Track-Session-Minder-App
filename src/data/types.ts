@@ -72,3 +72,14 @@ export interface Feedback {
   email?: string;
   createdAt: string;
 }
+
+/** A message organizers push to drivers' screens, such as a lightning hold. */
+export interface Announcement {
+  id: string;
+  /** null: every driver, whatever event they follow (Redline only). */
+  eventId: string | null;
+  message: string;
+  createdAt: string;
+  /** When it disappears on its own; null keeps it up until an organizer clears it. */
+  endsAt: string | null;
+}

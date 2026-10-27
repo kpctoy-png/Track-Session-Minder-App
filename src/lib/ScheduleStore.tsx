@@ -9,7 +9,7 @@ import { AppState } from 'react-native';
 
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { SAMPLE_CLUBS, SAMPLE_EVENTS } from '@/data/sampleEvents';
-import type { BookingKind, Club, CoachingSession, EventDay, Feedback, ScheduleItem, TrackEvent } from '@/data/types';
+import type { Announcement, BookingKind, Club, CoachingSession, EventDay, Feedback, ScheduleItem, TrackEvent } from '@/data/types';
 import { normalizeEmail } from './coaching';
 import { todayISO } from './dates';
 import { sortItems } from './schedule';
@@ -55,6 +55,11 @@ interface ScheduleStore {
   /** Feedback about one event, or about the app when eventId is null. Admins only. */
   loadFeedback: (eventId: string | null) => Promise<Feedback[]>;
   isPlatformAdmin: boolean;
+  /** Announcements that are still up, for every event (filter with activeAnnouncements). */
+  announcements: Announcement[];
+  /** Puts a message on drivers' screens. eventId null reaches every driver (Redline only). Resolves to an error message, or null. */
+  postAnnouncement: (eventId: string | null, message: string, minutes: number | null) => Promise<string | null>;
+  clearAnnouncement: (id: string) => Promise<string | null>;
   /** Signed-in admin; always null when there is no database. */
   session: Session | null;
   /** Clubs whose events the signed-in admin may change. */
@@ -157,6 +162,31 @@ async function fetchCoaching(): Promise<CoachingSession[]> {
   return (data as CoachingRow[]).map(toCoaching);
 }
 
+interface AnnouncementRow {
+  id: string;
+  event_id: string | null;
+  message: string;
+  created_at: string;
+  ends_at: string | null;
+}
+
+async function fetchAnnouncements(): Promise<Announcement[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('id, event_id, message, created_at, ends_at')
+    .is('cleared_at', null)
+    .or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data as AnnouncementRow[]).map((r) => ({ id: r.id, eventId: r.event_id, message: r.message, createdAt: r.created_at, endsAt: r.ends_at }));
+}
+
+/** The announcements a driver looking at this event should see right now, newest first. */
+export function activeAnnouncements(all: Announcement[], eventId: string | undefined, now = new Date()): Announcement[] {
+  return all.filter((a) => (a.eventId === null || a.eventId === eventId) && (!a.endsAt || new Date(a.endsAt) > now));
+}
+
 function replaceDay(events: TrackEvent[], day: EventDay): TrackEvent[] {
   return events.map((e) => ({ ...e, days: e.days.map((d) => (d.id === day.id ? day : d)) }));
 }
@@ -174,6 +204,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   // How far the preview clock is moved from the real time of day, in minutes.
   const [previewOffset, setPreviewOffset] = useState(0);
   const [coaching, setCoaching] = useState<CoachingSession[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [practiceEmail, setPracticeEmail] = useState<string | null>(null);
   // Without a database, feedback stays on this device.
   const [practiceFeedback, setPracticeFeedback] = useState<Feedback[]>([]);
@@ -203,10 +234,18 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     const catchUp = () => {
       reload();
       fetchCoaching().then((rows) => !cancelled && setCoaching(rows), () => {});
+      loadAnnouncements();
     };
     let connections = 0;
+    const loadAnnouncements = () => fetchAnnouncements().then((rows) => !cancelled && setAnnouncements(rows), () => {});
 
     reload();
+    loadAnnouncements();
+    // A channel of its own, so the schedule keeps updating even before the announcements table exists.
+    const announcementsChannel = client
+      .channel('announcements')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, loadAnnouncements)
+      .subscribe();
     const channel = client
       .channel('schedule')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'event_days' }, (payload) =>
@@ -231,6 +270,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       client.removeChannel(channel);
+      client.removeChannel(announcementsChannel);
       appState.remove();
       auth.subscription.unsubscribe();
     };
@@ -418,6 +458,34 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         }));
       },
       isPlatformAdmin: rights.all,
+      announcements,
+      postAnnouncement: async (eventId, message, minutes) => {
+        const text = message.trim().slice(0, 200);
+        if (!text) return 'Type a message first.';
+        const endsAt = minutes ? new Date(Date.now() + minutes * 60_000).toISOString() : null;
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('announcements')
+            .insert({ event_id: eventId, message: text, ends_at: endsAt })
+            .select('id, event_id, message, created_at, ends_at')
+            .single();
+          if (error) return `The announcement was not sent: ${error.message}`;
+          const r = data as AnnouncementRow;
+          setAnnouncements((all) => (all.some((a) => a.id === r.id) ? all : [{ id: r.id, eventId: r.event_id, message: r.message, createdAt: r.created_at, endsAt: r.ends_at }, ...all]));
+        } else {
+          setAnnouncements((all) => [{ id: `practice-${Date.now()}`, eventId, message: text, createdAt: new Date().toISOString(), endsAt }, ...all]);
+        }
+        return null;
+      },
+      clearAnnouncement: async (id) => {
+        if (supabase) {
+          const { data, error } = await supabase.from('announcements').update({ cleared_at: new Date().toISOString() }).eq('id', id).select('id');
+          if (error) return error.message;
+          if (!data?.length) return 'The announcement was not cleared. Try signing in again.';
+        }
+        setAnnouncements((all) => all.filter((a) => a.id !== id));
+        return null;
+      },
       removeCoaching: async (id) => {
         if (supabase) {
           const { data, error } = await supabase.from('coaching_sessions').delete().eq('id', id).select('id');
@@ -437,7 +505,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         resetPreview: () => setPreviewOffset(0),
       },
     };
-  }, [clubs, events, event, day, isLive, now, previewOffset, sync, session, rights, coaching, practiceEmail, practiceFeedback]);
+  }, [clubs, events, event, day, isLive, now, previewOffset, sync, session, rights, coaching, announcements, practiceEmail, practiceFeedback]);
 
   if (!store) return <LoadingOrError status={sync.status} message={sync.message} />;
   return <Context.Provider value={store}>{children}</Context.Provider>;
