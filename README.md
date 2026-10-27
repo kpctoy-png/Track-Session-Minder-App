@@ -76,6 +76,13 @@ account as the sign-in emails. One-time setup in the Supabase dashboard:
 
 No dashboard webhook is needed (creating one as well would send every email twice).
 
+### First session of the day
+
+Some clubs run each run group's first session of the day as warm-up laps. The
+Schedule tab and Now cards show a yellow note on it, set per club in
+`FIRST_SESSION_RULES` (`src/lib/schedule.ts`). Just Track It: 2 laps, no
+passing, yellow flag.
+
 ### Announcements
 
 Organizers can put an urgent message (lightning, red flag) in red at the top of

@@ -34,6 +34,20 @@ export function usesTrack(item: ScheduleItem): boolean {
   return item.kind === 'track' || item.kind === 'break' || item.kind === 'parade';
 }
 
+/** Clubs whose run groups start each day with warm-up laps, and what drivers should know about that session. */
+const FIRST_SESSION_RULES: Record<string, string> = {
+  'just-track-it': '2 laps, no passing, yellow flag',
+};
+
+/** The club's note for a run group's first session of the day, if this is one (and the club has such a rule). */
+export function firstSessionNote(clubId: string, items: ScheduleItem[], item: ScheduleItem): string | undefined {
+  const rule = FIRST_SESSION_RULES[clubId];
+  if (!rule || item.kind !== 'track' || !item.groups?.length) return undefined;
+  const earlier = items.filter((i) => i.kind === 'track' && toMinutes(i.start) < toMinutes(item.start));
+  const first = item.groups.some((g) => !earlier.some((i) => i.groups?.includes(g)));
+  return first ? rule : undefined;
+}
+
 export interface NowState {
   onTrack?: ScheduleItem;
   upNext?: ScheduleItem;

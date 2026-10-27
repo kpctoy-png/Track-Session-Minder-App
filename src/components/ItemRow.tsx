@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { ScheduleItem } from '@/data/types';
 import { formatRange, usesTrack } from '@/lib/schedule';
+import { FirstSessionNote } from './FirstSessionNote';
 import { ItemTitle } from './ItemTitle';
 import { colors, itemColors } from './theme';
 
@@ -10,9 +11,11 @@ interface Props {
   item: ScheduleItem;
   status?: 'past' | 'now' | 'future';
   right?: ReactNode;
+  /** The club's note for a run group's first session of the day. */
+  note?: string;
 }
 
-export function ItemRow({ item, status = 'future', right }: Props) {
+export function ItemRow({ item, status = 'future', right, note }: Props) {
   const bars = itemColors(item);
   return (
     <View
@@ -33,6 +36,7 @@ export function ItemRow({ item, status = 'future', right }: Props) {
         <ItemTitle item={item} style={styles.title}>
           {!usesTrack(item) ? <Text style={styles.tag}>  · off track</Text> : null}
         </ItemTitle>
+        {note ? <FirstSessionNote text={note} /> : null}
       </View>
       {status === 'now' ? <Text style={styles.nowBadge}>NOW</Text> : null}
       {right}

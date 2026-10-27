@@ -6,6 +6,7 @@ import { AlertsCard } from '@/components/AlertsCard';
 import { ClubLogo, hasClubLogo } from '@/components/ClubLogo';
 import { JoinListCard } from '@/components/JoinListCard';
 import { EventPicker } from '@/components/EventPicker';
+import { FirstSessionNote } from '@/components/FirstSessionNote';
 import { LoadingOrError } from '@/components/LoadingOrError';
 import { PreviewClock } from '@/components/PreviewClock';
 import { ItemTitle } from '@/components/ItemTitle';
@@ -14,7 +15,7 @@ import type { Club, ScheduleItem } from '@/data/types';
 import { bookingName, coachingTimes, coachingTitle, sessionsFor } from '@/lib/coaching';
 import { daysBetween, shortDate, todayISO } from '@/lib/dates';
 import { useSchedule } from '@/lib/ScheduleStore';
-import { countdown, formatRange, formatTime, fromMinutes, getNowState, sortItems, toMinutes } from '@/lib/schedule';
+import { countdown, firstSessionNote, formatRange, formatTime, fromMinutes, getNowState, sortItems, toMinutes } from '@/lib/schedule';
 
 export default function NowScreen() {
   const { clubs, events, event, day, clock, hasEvents, coaching, myEmail, selectEvent, selectDay } = useSchedule();
@@ -109,6 +110,7 @@ export default function NowScreen() {
           label="On track now"
           item={state.onTrack}
           big
+          note={firstSessionNote(event.clubId, day.items, state.onTrack)}
           subtitle={`Ends in ${countdown(clock.minuteOfDay, state.onTrack.end, clock.seconds)}`}
         />
       ) : (
@@ -119,6 +121,7 @@ export default function NowScreen() {
         <Card
           label="Up next"
           item={state.upNext}
+          note={firstSessionNote(event.clubId, day.items, state.upNext)}
           subtitle={`Starts in ${countdown(clock.minuteOfDay, state.upNext.start, clock.seconds)}`}
         />
       ) : null}
@@ -176,9 +179,11 @@ interface CardProps {
   time?: string;
   notes?: string;
   highlight?: boolean;
+  /** The club's note for a run group's first session of the day. */
+  note?: string;
 }
 
-function Card({ label, item, title, subtitle, big, time, notes, highlight }: CardProps) {
+function Card({ label, item, title, subtitle, big, time, notes, highlight, note }: CardProps) {
   const bars = item ? itemColors(item) : [highlight ? colors.accent : colors.border];
   return (
     <View style={[styles.card, highlight && styles.cardHighlight]}>
@@ -195,6 +200,7 @@ function Card({ label, item, title, subtitle, big, time, notes, highlight }: Car
           <Text style={[styles.cardTitle, big && styles.cardTitleBig]}>{title}</Text>
         )}
         {item || time ? <Text style={styles.cardTime}>{item ? formatRange(item) : time}</Text> : null}
+        {note ? <FirstSessionNote text={note} big={big} /> : null}
         {subtitle ? <Text style={[styles.cardSub, big && styles.cardSubBig]}>{subtitle}</Text> : null}
         {notes ? <Text style={styles.cardTime}>{notes}</Text> : null}
       </View>
