@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AlertsCard } from '@/components/AlertsCard';
 import { DriverGuide } from '@/components/DriverGuide';
 import { EmailCodeSignIn } from '@/components/EmailCodeSignIn';
 import { FeedbackForm } from '@/components/FeedbackForm';
@@ -77,6 +78,7 @@ export default function MeScreen() {
       {topButtons}
 
       <Text style={styles.heading}>Your coaching and check rides</Text>
+      {mine.length ? <AlertsCard placement="booking" /> : null}
       {mine.length ? (
         mine.map(({ session, event, day, start, end }) => (
           <Pressable

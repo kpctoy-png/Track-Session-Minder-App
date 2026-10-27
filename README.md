@@ -78,7 +78,8 @@ No dashboard webhook is needed (creating one as well would send every email twic
 
 ### Phone alerts
 
-Drivers using the web version can tap Turn on alerts (bottom of the Now tab) to
+Drivers using the web version can tap Turn on alerts (top of the Now tab while
+alerts are off; My Day also prompts anyone with a booking) to
 get a phone notification when their event's schedule is changed in Admin. On
 iPhone this needs the home screen app (iOS 16.4+). It is sent by the Edge
 Function in `supabase/functions/push-schedule`. One-time setup:
