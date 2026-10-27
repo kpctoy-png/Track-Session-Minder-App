@@ -2,7 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { getAlertsState, refreshAlerts, turnOffAlerts, turnOnAlerts, type AlertsState } from '@/lib/push';
+import { getAlertsState, refreshAlerts, turnOffAlerts, turnOnAlerts, unblockSteps, type AlertsState } from '@/lib/push';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { colors } from './theme';
 
@@ -90,9 +90,20 @@ export function AlertsCard({ placement }: { placement: 'top' | 'bottom' | 'booki
           then Add to Home Screen), then open it from there.
         </Text>
       ) : alerts.state === 'blocked' ? (
-        <Text style={styles.text}>
-          🔔 Alerts are blocked for this app. To get them, allow notifications for it in your phone's settings.
-        </Text>
+        <>
+          <Text style={styles.urgentTitle}>🔔 Alerts are blocked on this phone</Text>
+          <Text style={styles.text}>
+            This phone was told to block alerts from the app, so it won't ask again. To fix it:
+          </Text>
+          {unblockSteps().map((step, i) => (
+            <Text key={step} style={styles.text}>
+              {i + 1}. {step}
+            </Text>
+          ))}
+          <Pressable onPress={alertsChanged}>
+            <Text style={styles.link}>I've allowed them, check again</Text>
+          </Pressable>
+        </>
       ) : onHere ? (
         <View style={styles.row}>
           <Text style={[styles.text, styles.grow]}>
