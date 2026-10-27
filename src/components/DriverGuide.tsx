@@ -96,7 +96,8 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
           enter that same email, and type the code we email you (no password). Your booking then shows on Now with a
           countdown, on Schedule with a badge, and on My Day. If the day runs late, its time moves too. Turn on alerts
           (top of the Now tab, or the card on My Day) while signed in, and your phone also tells you when it's booked, changed, moved or
-          cancelled, and reminds you 15 minutes before it starts to pair with your instructor.
+          cancelled, and reminds you 15 minutes before it starts to pair with your instructor. Once it ends it drops off My
+          Day (tap Show finished today to see it again).
         </Body>
       </Section>
 
