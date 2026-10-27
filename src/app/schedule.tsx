@@ -8,10 +8,10 @@ import { LoadingOrError } from '@/components/LoadingOrError';
 import { colors } from '@/components/theme';
 import { isCoachOf, sessionsFor } from '@/lib/coaching';
 import { useSchedule } from '@/lib/ScheduleStore';
-import { sortItems, toMinutes } from '@/lib/schedule';
+import { firstSessionNote, sortItems, toMinutes } from '@/lib/schedule';
 
 export default function ScheduleScreen() {
-  const { day, clock, hasEvents, coaching, myEmail } = useSchedule();
+  const { event, day, clock, hasEvents, coaching, myEmail } = useSchedule();
   if (!hasEvents) return <LoadingOrError status="live" />;
   const now = clock.minuteOfDay;
   // Item id -> badge, for bookings this person takes ("YOUR COACHING") or gives ("YOU'RE COACHING").
@@ -50,6 +50,7 @@ export default function ScheduleScreen() {
             key={item.id}
             item={item}
             status={status}
+            note={firstSessionNote(event.clubId, day.items, item)}
             right={badges.has(item.id) ? <Text style={styles.coaching}>{badges.get(item.id)}</Text> : undefined}
           />
         );

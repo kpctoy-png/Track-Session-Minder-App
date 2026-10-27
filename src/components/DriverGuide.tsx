@@ -75,6 +75,10 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
           Every session in order. On the event day, the current one is outlined and says NOW, and finished ones fade out. Indented items
           happen off track (classroom, meetings).
         </Body>
+        <Body>
+          At Just Track It events, each group's first session of the day has a yellow note: 2 laps, no passing, yellow
+          flag. It shows on the Schedule tab and on the Now tab's cards.
+        </Body>
         <Text style={styles.subheading}>Run group colors</Text>
         {Object.values(RUN_GROUPS).map((g) => (
           <View key={g.name} style={styles.legendRow}>
