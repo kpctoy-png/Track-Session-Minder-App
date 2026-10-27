@@ -19,9 +19,9 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const { data, error } = await supabase.from('event_roster').select('name, email').eq('event_id', eventId).order('name');
+    const { data, error } = await supabase.from('event_roster').select('name, email, run_group, coaching').eq('event_id', eventId).order('name');
     if (error) setError(error.message);
-    else setRows(data.map((r) => ({ name: r.name, email: r.email ?? '' })));
+    else setRows(data.map((r) => ({ name: r.name, email: r.email ?? '', runGroup: r.run_group ?? undefined, coaching: r.coaching ?? 0 })));
   }, [eventId]);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
     const del = await supabase.from('event_roster').delete().eq('event_id', eventId);
     const ins = del.error
       ? del
-      : await supabase.from('event_roster').insert(upload.rows.map((r) => ({ event_id: eventId, name: r.name, email: r.email })));
+      : await supabase.from('event_roster').insert(upload.rows.map((r) => ({ event_id: eventId, name: r.name, email: r.email, run_group: r.runGroup ?? null, coaching: r.coaching ?? 0 })));
     setBusy(false);
     if (ins.error) return setError(`Not saved: ${ins.error.message}`);
     setUpload(null);
@@ -86,7 +86,8 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
       {upload ? (
         <View style={styles.confirm}>
           <Text style={styles.confirmText}>
-            Found {upload.rows.length} {upload.rows.length === 1 ? 'driver' : 'drivers'} with an email in {upload.file}.
+            Found {upload.rows.length} {upload.rows.length === 1 ? 'driver' : 'drivers'} with an email in {upload.file}
+            {paidFor(upload.rows) ? `, ${paidFor(upload.rows)} of them paid for coaching` : ''}.
             {rows?.length ? ` This replaces the ${rows.length} already on the list.` : ''} Save the list for {eventName}?
           </Text>
           <View style={styles.buttons}>
@@ -123,7 +124,9 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
           {shown!.map((r) => (
             <View key={r.email} style={styles.row}>
               <Text style={styles.name}>{r.name || r.email}</Text>
-              {r.name ? <Text style={styles.detail}>{r.email}</Text> : null}
+              <Text style={styles.detail}>
+                {[r.name ? r.email : '', r.runGroup, r.coaching ? `${r.coaching} coaching paid` : ''].filter(Boolean).join(' · ')}
+              </Text>
             </View>
           ))}
           {rows.length > 10 ? (
@@ -136,6 +139,8 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
     </View>
   );
 }
+
+const paidFor = (rows: RosterRow[]) => rows.filter((r) => r.coaching).length;
 
 const styles = StyleSheet.create({
   sub: { color: colors.muted, fontSize: 13, marginTop: 2, marginBottom: 10 },

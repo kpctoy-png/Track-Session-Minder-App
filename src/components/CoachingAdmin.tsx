@@ -1,15 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { BookingKind } from '@/data/types';
 import { bookingName, coachingTimes, findClash, isEmail } from '@/lib/coaching';
+import { runGroupFor } from '@/lib/roster';
 import { formatRange, formatTime, sortItems } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
+import { supabase } from '@/lib/supabase';
 import { colors } from './theme';
 
-/** Admin list of the selected day's coaching sessions and check rides, with a form to book one for a student. */
-export function CoachingAdmin() {
-  const { day, coaching, addCoaching, removeCoaching } = useSchedule();
+interface Paid {
+  name: string;
+  email: string;
+  run_group: string | null;
+  coaching: number;
+}
+
+/**
+ * Admin list of the selected day's coaching sessions and check rides, with a form to book one for a student.
+ * When the event's registered drivers list says who paid for coaching, it also lists them with how many of their
+ * sessions are booked, and booking one fills in the form.
+ */
+export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
+  const { event, day, coaching, addCoaching, removeCoaching } = useSchedule();
+  const [paid, setPaid] = useState<Paid[]>([]);
+  const [forGroup, setForGroup] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [kind, setKind] = useState<BookingKind>('coaching');
   const [email, setEmail] = useState('');
@@ -21,6 +36,36 @@ export function CoachingAdmin() {
   const [busy, setBusy] = useState(false);
   // Removing sends the student and instructor an email and an alert, so it waits for a second tap.
   const [removing, setRemoving] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPaid([]);
+    supabase
+      ?.from('event_roster')
+      .select('name, email, run_group, coaching')
+      .eq('event_id', event.id)
+      .gt('coaching', 0)
+      .order('name')
+      .then(({ data }) => setPaid(data ?? []));
+  }, [event.id, rosterVersion]);
+
+  // Coaching sessions each student has across the whole event (any day).
+  const eventDays = new Set(event.days.map((d) => d.id));
+  const bookedFor = (email: string) =>
+    coaching.filter((c) => c.kind !== 'checkride' && eventDays.has(c.dayId) && c.studentEmail.toLowerCase() === email).length;
+  const needs = paid
+    .map((p) => ({ ...p, booked: bookedFor(p.email) }))
+    .sort((a, b) => Number(a.booked >= a.coaching) - Number(b.booked >= b.coaching) || a.name.localeCompare(b.name));
+  const waiting = needs.filter((p) => p.booked < p.coaching).length;
+  const suggested = runGroupFor(forGroup ?? undefined);
+
+  const startBooking = (p: Paid) => {
+    setKind('coaching');
+    setEmail(p.email);
+    setForGroup(p.run_group);
+    setItemId(null);
+    setError(null);
+    setAdding(true);
+  };
 
   const booked = coaching
     .filter((c) => c.dayId === day.id)
@@ -61,6 +106,7 @@ export function CoachingAdmin() {
     setEmail('');
     setNotes('');
     setItemId(null);
+    setForGroup(null);
     setError(null);
     setAdding(false);
   };
@@ -71,6 +117,31 @@ export function CoachingAdmin() {
         Book a paid coaching session or a check ride for one student. The student and instructor each get an email, and see
         it in the app after signing in on the My Day tab. Nobody can be booked twice at the same time.
       </Text>
+      {needs.length ? (
+        <View style={styles.paid}>
+          <Text style={styles.label}>
+            {waiting ? `Needs a coach: ${waiting} ${waiting === 1 ? 'driver' : 'drivers'}` : 'Everyone who paid for coaching is booked'}
+          </Text>
+          <Text style={styles.paidSub}>From the registered drivers list. Booked counts every day of {event.name}.</Text>
+          {needs.map((p) => (
+            <View key={p.email} style={styles.paidRow}>
+              <View style={styles.rowBody}>
+                <Text style={styles.paidName}>{p.name || p.email}</Text>
+                <Text style={styles.rowSub}>
+                  {[p.run_group, `${p.booked} of ${p.coaching} booked`].filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+              {p.booked < p.coaching ? (
+                <Pressable onPress={() => startBooking(p)} style={[styles.btn, styles.btnPrimary]}>
+                  <Text style={[styles.btnText, styles.btnTextPrimary]}>Book</Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.done}>✓</Text>
+              )}
+            </View>
+          ))}
+        </View>
+      ) : null}
       {booked.map(({ session, start, end }) => (
         <View key={session.id}>
         <View style={styles.row}>
@@ -153,10 +224,12 @@ export function CoachingAdmin() {
             onChangeText={setCoachEmail}
           />
           <Text style={styles.label}>During which session?</Text>
+          {suggested ? <Text style={styles.paidSub}>★ marks {forGroup} sessions.</Text> : null}
           <View style={styles.chips}>
             {items.map((item) => (
               <Pressable key={item.id} onPress={() => setItemId(item.id)} style={[styles.chip, itemId === item.id && styles.chipOn]}>
                 <Text style={[styles.chipText, itemId === item.id && styles.chipTextOn]}>
+                  {suggested && item.groups?.includes(suggested) ? '★ ' : ''}
                   {formatTime(item.start)} {item.title}
                 </Text>
               </Pressable>
@@ -175,7 +248,13 @@ export function CoachingAdmin() {
             <Pressable onPress={save} style={[styles.btn, styles.btnPrimary]} disabled={busy}>
               <Text style={[styles.btnText, styles.btnTextPrimary]}>{busy ? 'Saving…' : kind === 'checkride' ? 'Book check ride' : 'Book coaching'}</Text>
             </Pressable>
-            <Pressable onPress={() => setAdding(false)} style={styles.btn}>
+            <Pressable
+              onPress={() => {
+                setAdding(false);
+                setForGroup(null);
+              }}
+              style={styles.btn}
+            >
               <Text style={styles.btnText}>Cancel</Text>
             </Pressable>
           </View>
@@ -220,4 +299,9 @@ const styles = StyleSheet.create({
   btnDanger: { borderColor: '#FF453A' },
   confirm: { borderWidth: 2, borderColor: '#FF453A', borderRadius: 12, padding: 12, marginBottom: 8, gap: 10 },
   confirmText: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  paid: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 12 },
+  paidSub: { color: colors.muted, fontSize: 12, marginTop: -4, marginBottom: 8 },
+  paidRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  paidName: { color: colors.text, fontSize: 15, fontWeight: '600' },
+  done: { color: '#34C759', fontSize: 20, fontWeight: '800', paddingHorizontal: 12 },
 });

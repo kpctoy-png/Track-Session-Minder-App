@@ -1,9 +1,15 @@
 // Reading a registration site's participant list: a CSV, or ClubReg's Report Builder export (an .xls file that
 // is really an HTML table).
 
+import type { RunGroupId } from '@/data/types';
+
 export interface RosterRow {
   name: string;
   email: string;
+  /** The run group as the registration site names it, e.g. "Intermediate 1". */
+  runGroup?: string;
+  /** Coaching sessions paid for (ClubReg's "Advanced Coaching Quantity"). */
+  coaching?: number;
 }
 
 /** Splits CSV text into rows of cells, handling quoted cells with commas, quotes and line breaks. */
@@ -71,6 +77,9 @@ export function rosterFromCsv(text: string): { rows: RosterRow[]; problem?: stri
   const last = col(/^last/);
   const full = col(/^(full )?name$|^driver( name)?$|^participant( name)?$/);
   const status = col(/^status$/);
+  const runGroup = col(/^run ?group$/);
+  const coaching = col(/coaching.*(quantity|qty)/);
+  const waitList = col(/coaching.*wait/);
 
   const seen = new Set<string>();
   const rows: RosterRow[] = [];
@@ -80,8 +89,25 @@ export function rosterFromCsv(text: string): { rows: RosterRow[]; problem?: stri
     if (!EMAIL.test(address) || seen.has(address)) continue;
     seen.add(address);
     const name = full >= 0 ? r[full] : [first >= 0 ? r[first] : '', last >= 0 ? r[last] : ''].join(' ');
-    rows.push({ name: (name ?? '').trim().replace(/\s+/g, ' ').slice(0, 200), email: address.slice(0, 254) });
+    const paid = coaching >= 0 && !/^y/i.test(waitList >= 0 ? (r[waitList] ?? '').trim() : '') ? parseInt(r[coaching] ?? '', 10) : 0;
+    rows.push({
+      name: (name ?? '').trim().replace(/\s+/g, ' ').slice(0, 200),
+      email: address.slice(0, 254),
+      runGroup: runGroup >= 0 ? (r[runGroup] ?? '').trim().slice(0, 60) || undefined : undefined,
+      coaching: Math.min(20, Math.max(0, paid || 0)),
+    });
   }
   if (!rows.length) return { rows, problem: 'The Email column has no email addresses in it.' };
   return { rows };
+}
+
+/** The app's run group for a registration site's run group name, if it matches one. */
+export function runGroupFor(name: string | undefined): RunGroupId | undefined {
+  if (!name) return undefined;
+  if (/novice/i.test(name)) return 'novice';
+  if (/int(ermediate)?\.? ?1|\bi1\b/i.test(name)) return 'int1';
+  if (/int(ermediate)?\.? ?2|\bi2\b/i.test(name)) return 'int2';
+  if (/adv/i.test(name)) return 'advanced';
+  if (/ladies/i.test(name)) return 'ladies';
+  return undefined;
 }
