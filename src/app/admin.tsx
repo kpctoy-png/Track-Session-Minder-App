@@ -2,6 +2,7 @@ import { useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AnnouncementAdmin } from '@/components/AnnouncementAdmin';
 import { CoachingAdmin } from '@/components/CoachingAdmin';
 import { Collapsible } from '@/components/Collapsible';
 import { EmailCodeSignIn } from '@/components/EmailCodeSignIn';
@@ -178,6 +179,15 @@ export default function AdminScreen() {
 
         {editable ? (
           <>
+            <Collapsible id="announce" title="Announcement to drivers" summary="Lightning, red flag or other urgent message" defaultOpen>
+              <AnnouncementAdmin
+                items={items}
+                fromMinute={clock.minuteOfDay}
+                isToday={!clock.isPreview}
+                onRecover={({ kind, minutes }) => (kind === 'late' ? runLate(minutes) : catchUp(minutes))}
+                onSent={(text) => setSaved({ text: `✓ ${text}`, at: Date.now() })}
+              />
+            </Collapsible>
             <Collapsible id="late" title="Running late or catching up" summary="Moves or shortens the rest of the day" defaultOpen>
             <Text style={styles.subheading}>Running late?</Text>
             <Text style={styles.sub}>Shifts everything after {formatTime(fromMinutes(clock.minuteOfDay))}.</Text>

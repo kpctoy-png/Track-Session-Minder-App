@@ -172,6 +172,15 @@ export function alertDrivers(eventId: string, dayId: string, body: string) {
     .catch(() => {});
 }
 
+/** Organizers: an announcement as a phone alert, to every phone following one of these events. */
+export function announceToPhones(eventIds: string[], message: string) {
+  for (const eventId of eventIds)
+    supabase?.functions
+      .invoke('push-schedule', { body: { action: 'send', eventId, body: `📢 ${message}` } })
+      .then(({ error }) => error && console.warn('Announcement alert not sent:', error.message))
+      .catch(() => {});
+}
+
 function fromBase64Url(value: string): ArrayBuffer {
   const base64 = (value + '='.repeat((4 - (value.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)).buffer;

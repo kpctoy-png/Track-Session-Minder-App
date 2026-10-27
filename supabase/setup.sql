@@ -447,6 +447,42 @@ $$;
 
 grant execute on function join_driver_list(text, text, text) to anon, authenticated;
 
+-- Announcements: urgent messages (a lightning hold, a red flag) shown in red at
+-- the top of drivers' screens. An event's organizers post them for that event;
+-- platform admins (Redline) can also post one for every driver (event_id null).
+-- Anyone can read them, since they're shown to everyone using the app.
+create table if not exists announcements (
+  id uuid primary key default gen_random_uuid(),
+  event_id text references events (id) on delete cascade,
+  message text not null check (char_length(trim(message)) between 1 and 200),
+  created_at timestamptz not null default now(),
+  ends_at timestamptz,
+  cleared_at timestamptz,
+  created_by uuid default auth.uid()
+);
+alter table announcements enable row level security;
+
+create or replace function can_announce(event text) returns boolean
+  language sql stable security definer set search_path = public as $$
+  select case when event is null then is_platform_admin()
+              else can_manage_club((select club_id from events where id = event)) end;
+$$;
+
+drop policy if exists "Anyone can read announcements" on announcements;
+create policy "Anyone can read announcements" on announcements for select using (true);
+drop policy if exists "Organizers post announcements" on announcements;
+create policy "Organizers post announcements" on announcements for insert to authenticated
+  with check (can_announce(event_id));
+drop policy if exists "Organizers clear announcements" on announcements;
+create policy "Organizers clear announcements" on announcements for update to authenticated
+  using (can_announce(event_id)) with check (can_announce(event_id));
+
+do $$
+begin
+  alter publication supabase_realtime add table announcements;
+exception when duplicate_object then null;
+end $$;
+
 -- Send changes to phones as they happen.
 do $$
 begin

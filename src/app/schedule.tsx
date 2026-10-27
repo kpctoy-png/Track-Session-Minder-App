@@ -1,5 +1,6 @@
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
+import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { AlertsCard } from '@/components/AlertsCard';
 import { EventPicker } from '@/components/EventPicker';
 import { ItemRow } from '@/components/ItemRow';
@@ -31,6 +32,7 @@ export default function ScheduleScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      <AnnouncementBanner />
       <EventPicker />
       <AlertsCard placement="top" />
       <Text style={styles.hint}>Indented items happen off track, alongside the sessions.</Text>

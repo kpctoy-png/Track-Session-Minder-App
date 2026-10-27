@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { AlertsCard } from '@/components/AlertsCard';
 import { DriverGuide } from '@/components/DriverGuide';
 import { EmailCodeSignIn } from '@/components/EmailCodeSignIn';
@@ -47,6 +48,7 @@ export default function MeScreen() {
   if (supabase && !myEmail)
     return (
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+        <AnnouncementBanner />
         <AlertsCard placement="top" />
         {topButtons}
         <EmailCodeSignIn
@@ -75,6 +77,7 @@ export default function MeScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      <AnnouncementBanner />
       <View style={styles.signedIn}>
         <Text style={styles.signedInText}>Signed in as {myEmail}</Text>
         <Btn label="Sign out" onPress={() => (supabase ? supabase.auth.signOut() : setPracticeEmail(null))} />
