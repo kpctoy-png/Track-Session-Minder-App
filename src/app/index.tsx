@@ -31,14 +31,19 @@ export default function NowScreen() {
     .filter((c) => clock.isPreview || toMinutes(c.end) > clock.minuteOfDay)
     .sort((a, b) => a.start.localeCompare(b.start))[0];
   // Otherwise point to their next coaching on another day, so it isn't hidden behind the day picker.
-  const today = todayISO();
+  // Sessions that already ended today don't count, so a finished check ride isn't shown as "next".
+  const now = new Date();
+  const today = todayISO(now);
+  const nowMinute = now.getHours() * 60 + now.getMinutes();
   const nextElsewhere = myCoaching
     ? undefined
     : mine
         .flatMap((c) => {
           const event = events.find((e) => e.days.some((d) => d.id === c.dayId));
           const other = event?.days.find((d) => d.id === c.dayId);
-          return event && other && other.date >= today ? [{ session: c, event, day: other, ...coachingTimes(c, other) }] : [];
+          if (!event || !other || other.date < today) return [];
+          const times = coachingTimes(c, other);
+          return other.date > today || toMinutes(times.end) > nowMinute ? [{ session: c, event, day: other, ...times }] : [];
         })
         .sort((a, b) => (a.day.date + a.start).localeCompare(b.day.date + b.start))[0];
 
