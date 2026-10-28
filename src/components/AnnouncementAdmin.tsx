@@ -7,6 +7,7 @@ import { announceToPhones, emailRoster } from '@/lib/push';
 import { activeAnnouncements, useSchedule } from '@/lib/ScheduleStore';
 import { supabase } from '@/lib/supabase';
 import { formatRange, shiftSchedule, sortItems, spreadCatchUp, trimSchedule } from '@/lib/schedule';
+import { GrammarCheck } from './GrammarCheck';
 import { colors } from './theme';
 
 const MAX = 200;
@@ -191,6 +192,13 @@ export function AnnouncementAdmin({
       <Text style={styles.count}>
         {message.length}/{MAX}
       </Text>
+      <GrammarCheck
+        text={message}
+        onChange={(t) => {
+          setMessage(t.slice(0, MAX));
+          setConfirming(false);
+        }}
+      />
       <Text style={styles.label}>Show it</Text>
       <View style={styles.buttons}>
         {DURATIONS.map((d) => (
