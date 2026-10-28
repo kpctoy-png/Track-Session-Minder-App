@@ -111,14 +111,24 @@ export function rosterFromTable(table: string[][]): { rows: RosterRow[]; problem
 function headerless(table: string[][]): { rows: RosterRow[]; problem?: string } {
   const email = table.reduce((found, r) => (found >= 0 ? found : r.findIndex((c) => EMAIL.test(c.trim()))), -1);
   if (email < 0) return { rows: [], problem: "Couldn't find any email addresses. Is this the participant list (ClubReg export, CSV or Excel)?" };
+  // Names come before the email. The first column after it with short text in it (Novice, Int 1, Instructor...) is
+  // the run group; failing that, any column whose cells name a known run group.
+  const listed = table.filter((r) => EMAIL.test((r[email] ?? '').trim()));
+  const width = Math.max(0, ...listed.map((r) => r.length));
+  const columns = Array.from({ length: width }, (_, i) => i).filter((i) => i !== email);
+  const short = (c: string | undefined) => !!c && /[a-z]/i.test(c) && !c.includes('@') && c.trim().length <= 30;
+  const group =
+    columns.find((i) => i > email && listed.some((r) => short(r[i]))) ??
+    columns.find((i) => listed.some((r) => short(r[i]) && runGroupFor(r[i].trim())));
   const seen = new Set<string>();
   const rows: RosterRow[] = [];
   for (const r of table) {
     const address = (r[email] ?? '').trim().toLowerCase();
     if (!EMAIL.test(address) || seen.has(address)) continue;
     seen.add(address);
-    const name = r.filter((c, i) => i !== email && /[a-z]/i.test(c)).join(' ');
-    rows.push({ name: name.trim().replace(/\s+/g, ' ').slice(0, 200), email: address.slice(0, 254), coaching: 0 });
+    const name = r.filter((c, i) => i !== email && i !== group && /[a-z]/i.test(c)).join(' ');
+    const runGroup = group !== undefined ? (r[group] ?? '').trim().slice(0, 60) || undefined : undefined;
+    rows.push({ name: name.trim().replace(/\s+/g, ' ').slice(0, 200), email: address.slice(0, 254), runGroup, coaching: 0 });
   }
   return { rows };
 }
