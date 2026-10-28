@@ -103,7 +103,7 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
           Want a coach? Sign in on My Day and tap Request coaching. It shows the price first ($100 per session at Just
           Track It) and that it's subject to availability. Add the session you'd like (requested sessions are not always available) if you
           like and tap Send request, then see the organizers at registration: they check for an open spot before you pay.
-          Once your session is scheduled you get the usual booking email and alert, or an email saying coaching is full.
+          Once your session is scheduled, the card shows its day, time, session and coach, and you get the usual booking email and alert, or an email saying coaching is full.
           You can withdraw a request until it's accepted.
         </Body>
       </Section>
