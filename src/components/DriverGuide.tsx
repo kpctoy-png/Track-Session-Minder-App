@@ -120,7 +120,9 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
       </Section>
 
       <Section title="If something looks off">
-        <Step>Times look old: reload the page, or close and reopen the app.</Step>
+        <Step>Times look old: reload the page.</Step>
+        <Step>iPhone: in Safari, tap the ↻ arrow in the address bar. In the home screen app, swipe up from the bottom and pause to see your open apps, swipe Track Session Minder up to close it, then open it again.</Step>
+        <Step>Android: in Chrome, tap ⋮ then ↻. In the home screen app, open your recent apps (swipe up and hold, or the square button), swipe Track Session Minder away, then open it again.</Step>
         <Step>Can't see your coaching: check you signed in with the email the booking was made for.</Step>
         <Step>Didn't get a code: check your spam folder, then tap Use a different email or send a new code.</Step>
       </Section>
