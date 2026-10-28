@@ -35,8 +35,8 @@ export function PrivacyPolicy({ onDone }: { onDone: () => void }) {
           The club's driver list: your name and email, only if you fill in “Stay in the loop” and tick the box.
         </Step>
         <Step>
-          Registered drivers: your name and email from the event's registration site (for example ClubReg), uploaded
-          by the club's organizers so they can email you urgent announcements during that event.
+          Registered drivers: your name, email and cell number from the event's registration site (for example ClubReg),
+          uploaded by the club's organizers so they can text or email you urgent announcements during that event.
         </Step>
         <Step>Feedback: your star rating, comment, and the name you choose to give.</Step>
         <Step>
@@ -49,7 +49,7 @@ export function PrivacyPolicy({ onDone }: { onDone: () => void }) {
       <Section title="How it's used">
         <Body>
           To show you the schedule and your bookings, send sign-in codes, booking emails, alerts and 15-minute
-          reminders. A club uses its own driver list to email you about its events, and its registered drivers list only to email
+          reminders. A club uses its own driver list to email you about its events, and its registered drivers list only to text or email
           urgent announcements (lightning, a red flag) during that event.
         </Body>
         <Body>No ads, no tracking or analytics, and we don't sell or rent your information to anyone.</Body>

@@ -390,16 +390,17 @@ async function rosterDue(all: boolean, club: string) {
   return due;
 }
 
-type PulledRow = { name?: unknown; email?: unknown; runGroup?: unknown; coaching?: unknown };
+type PulledRow = { name?: unknown; email?: unknown; runGroup?: unknown; coaching?: unknown; phone?: unknown };
 
 /** Replaces an event's roster with a fresh pull and logs the difference from the last list. */
 async function rosterPull(eventId: string, pulled: PulledRow[]) {
-  const rows = new Map<string, { event_id: string; name: string; email: string; run_group: string | null; coaching: number }>();
+  const rows = new Map<string, { event_id: string; name: string; email: string; run_group: string | null; coaching: number; phone: string | null }>();
   for (const r of pulled.slice(0, 2000)) {
     const email = String(r.email ?? '').trim().toLowerCase().slice(0, 254);
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) continue;
     const coaching = Math.min(20, Math.max(0, Math.floor(Number(r.coaching) || 0)));
-    rows.set(email, { event_id: eventId, name: String(r.name ?? '').slice(0, 200), email, run_group: String(r.runGroup ?? '').slice(0, 60) || null, coaching });
+    const phone = /^\+\d{8,15}$/.test(String(r.phone ?? '')) ? String(r.phone) : null;
+    rows.set(email, { event_id: eventId, name: String(r.name ?? '').slice(0, 200), email, run_group: String(r.runGroup ?? '').slice(0, 60) || null, coaching, phone });
   }
   if (!rows.size) {
     await db.from('roster_pulls').insert({ event_id: eventId, problem: 'ClubReg returned no drivers, so the list was kept.' });
