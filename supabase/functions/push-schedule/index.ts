@@ -15,6 +15,9 @@
 // { action: 'email', eventId, message } emails an announcement to the event's registered
 // drivers (the event_roster list its organizers uploaded), after the same organizer check.
 //
+// { action: 'coaching-request' } comes from a trigger when a driver asks for coaching (alerts and emails
+// the club's organizers) or an organizer declines one (alerts and emails the driver).
+//
 // The "ClubReg sync" GitHub Action calls it with the ROSTER_SYNC_TOKEN secret (set in both places):
 // { action: 'roster-due' } lists the events linked to ClubReg that are due a pull (from two days
 // before through the last day; with all: true, every linked event that hasn't ended), and
@@ -262,6 +265,15 @@ async function sendReminders() {
 
 const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
+/** The coaching Gmail account (SMTP_USER / SMTP_PASS secrets). */
+const gmail = () =>
+  nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: { user: Deno.env.get('SMTP_USER'), pass: Deno.env.get('SMTP_PASS') },
+  });
+
 /**
  * Emails an announcement to everyone on the event's roster (or only the given run groups), 50 at a time in
  * Bcc so nobody sees the others' addresses. Returns how many addresses it went to.
@@ -273,12 +285,7 @@ async function emailRoster(eventId: string, eventName: string, message: string, 
   const emails = [...new Set((data ?? []).map((r) => r.email as string))];
   if (!emails.length) return 0;
   const from = Deno.env.get('SMTP_USER');
-  const mailer = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: { user: from, pass: Deno.env.get('SMTP_PASS') },
-  });
+  const mailer = gmail();
   const html =
     `<p style="font-size:20px;font-weight:bold">${escape(message)}</p>` +
     `<p>From the organizers of ${escape(eventName)}. See the latest schedule in ` +
@@ -292,6 +299,55 @@ async function emailRoster(eventId: string, eventName: string, message: string, 
       html,
     });
   return emails.length;
+}
+
+/** Everyone who runs this club's events (named organizers, club admins and Redline), by email. */
+async function organizerEmails(clubId: string): Promise<string[]> {
+  const { data: named } = await db.from('club_organizers').select('email').eq('club_id', clubId);
+  const { data: admins } = await db.from('club_admins').select('user_id').eq('club_id', clubId);
+  const { data: platform } = await db.from('platform_admins').select('user_id');
+  const users = await Promise.all([...(admins ?? []), ...(platform ?? [])].map((a) => db.auth.admin.getUserById(a.user_id as string)));
+  const emails = [...(named ?? []).map((n) => n.email as string), ...users.map((u) => u.data.user?.email?.toLowerCase() ?? '')];
+  return [...new Set(emails.filter(Boolean))];
+}
+
+type CoachingRequest = { event_id: string; email: string; note: string | null; status: string };
+
+/** A driver asked for coaching (tell the organizers), or an organizer declined it (tell the driver). */
+async function coachingRequest(input: { type: string; record: CoachingRequest }) {
+  const r = input.record;
+  const { data: event } = await db.from('events').select('name, club_id').eq('id', r.event_id).maybeSingle();
+  if (!event) return;
+  const from = Deno.env.get('SMTP_USER');
+  if (input.type === 'INSERT') {
+    const { data: paid } = await db.from('event_roster').select('name, coaching').eq('event_id', r.event_id).eq('email', r.email).maybeSingle();
+    const who = paid?.name ? `${paid.name} (${r.email})` : r.email;
+    const clubReg = !paid ? '' : paid.coaching ? `Paid for ${paid.coaching} coaching in ClubReg.` : 'Not paid for coaching in ClubReg yet.';
+    const organizers = await organizerEmails(event.club_id);
+    for (const email of organizers)
+      await pushTo(await phonesOf(email), { title: `Coaching request · ${event.name}`, body: `${who}${r.note ? `: ${r.note}` : ''}`, tag: `request-${r.email}` });
+    if (organizers.length)
+      await gmail().sendMail({
+        from: `"Track Session Minder" <${from}>`,
+        to: from,
+        bcc: organizers,
+        subject: `Coaching request: ${who}, ${event.name}`,
+        html:
+          `<p><b>${escape(who)}</b> asked for a coaching session at ${escape(event.name)}.</p>` +
+          (r.note ? `<p>Note: ${escape(r.note)}</p>` : '') +
+          (clubReg ? `<p>${clubReg}</p>` : '') +
+          `<p>Book or decline it in <a href="${APP_URL}admin">Admin → Coaching</a>.</p>`,
+      });
+  } else if (r.status === 'declined') {
+    const body = `Sorry, coaching at ${event.name} is full, so we couldn't book you a session.`;
+    await pushTo(await phonesOf(r.email), { title: event.name, body, tag: `request-${r.email}` });
+    await gmail().sendMail({
+      from: `"${event.name.replace(/["<>]/g, '')} via Track Session Minder" <${from}>`,
+      to: r.email,
+      subject: `Coaching request: ${event.name}`,
+      html: `<p>${escape(body)}</p>`,
+    });
+  }
 }
 
 /** Whether the call carries the ROSTER_SYNC_TOKEN secret. */
@@ -397,8 +453,12 @@ Deno.serve(async (req) => {
       return reply(200, await rosterPull(eventId, Array.isArray(input.rows) ? input.rows : []));
     }
 
-    if (input.action === 'booking' || input.action === 'reminders') {
+    if (input.action === 'booking' || input.action === 'reminders' || input.action === 'coaching-request') {
       if (!(await fromDatabase(req))) return reply(403, { error: 'Only the database may call this' });
+      if (input.action === 'coaching-request') {
+        await coachingRequest(input);
+        return reply(200, { ok: true });
+      }
       if (input.action === 'booking') {
         await bookingChanged(input);
         return reply(200, { ok: true });

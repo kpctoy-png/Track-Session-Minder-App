@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { AlertsCard } from '@/components/AlertsCard';
+import { CoachingRequestCard } from '@/components/CoachingRequestCard';
 import { DriverGuide } from '@/components/DriverGuide';
 import { EmailCodeSignIn } from '@/components/EmailCodeSignIn';
 import { FeedbackForm } from '@/components/FeedbackForm';
@@ -132,6 +133,7 @@ export default function MeScreen() {
           <Text style={styles.doneLink}>{showDone ? 'Hide finished' : `Show ${doneToday.length} finished today`}</Text>
         </Pressable>
       ) : null}
+      {myEmail ? <CoachingRequestCard email={myEmail.toLowerCase()} /> : null}
     </ScrollView>
   );
 }

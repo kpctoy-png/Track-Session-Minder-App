@@ -54,3 +54,8 @@ export function findClash(
   }
   return undefined;
 }
+
+/** What a club tells drivers before they ask for coaching: the price and how to pay. */
+export const COACHING_OFFER: Record<string, { price: string; pay: string }> = {
+  'just-track-it': { price: '$100 per session', pay: "Pay through ClubReg's Advanced Coaching option." },
+};

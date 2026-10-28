@@ -9,6 +9,13 @@ import { useSchedule } from '@/lib/ScheduleStore';
 import { supabase } from '@/lib/supabase';
 import { colors } from './theme';
 
+interface Request {
+  id: string;
+  email: string;
+  note: string | null;
+  created_at: string;
+}
+
 interface Paid {
   name: string;
   email: string;
@@ -36,8 +43,30 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   const [busy, setBusy] = useState(false);
   // Removing sends the student and instructor an email and an alert, so it waits for a second tap.
   const [removing, setRemoving] = useState<string | null>(null);
-  // The driver whose Book button opened the form, so it shows under them.
+  // Which Book button opened the form ("paid:<email>" or "request:<id>"), so it shows under that row.
   const [bookingFrom, setBookingFrom] = useState<string | null>(null);
+  const [requests, setRequests] = useState<Request[]>([]);
+  // The request being booked, marked booked once the booking saves.
+  const [forRequest, setForRequest] = useState<string | null>(null);
+  // Declining tells the driver it's full, so it waits for a second tap.
+  const [declining, setDeclining] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRequests([]);
+    supabase
+      ?.from('coaching_requests')
+      .select('id, email, note, created_at')
+      .eq('event_id', event.id)
+      .eq('status', 'open')
+      .order('created_at')
+      .then(({ data }) => setRequests(data ?? []));
+  }, [event.id, rosterVersion]);
+
+  const answer = async (id: string, status: 'booked' | 'declined') => {
+    const { error } = await supabase!.from('coaching_requests').update({ status }).eq('id', id);
+    if (error) return setError(error.message);
+    setRequests((r) => r.filter((x) => x.id !== id));
+  };
 
   useEffect(() => {
     setPaid([]);
@@ -60,8 +89,9 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   const waiting = needs.filter((p) => p.booked < p.coaching).length;
   const suggested = runGroupFor(forGroup ?? undefined);
 
-  const startBooking = (p: Paid) => {
-    setBookingFrom(p.email);
+  const startBooking = (p: Paid, request?: string) => {
+    setBookingFrom(request ? `request:${request}` : `paid:${p.email}`);
+    setForRequest(request ?? null);
     setKind('coaching');
     setEmail(p.email);
     setForGroup(p.run_group);
@@ -106,6 +136,8 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
     const problem = await addCoaching(draft);
     setBusy(false);
     if (problem) return setError(problem);
+    if (forRequest) await answer(forRequest, 'booked');
+    setForRequest(null);
     setEmail('');
     setNotes('');
     setItemId(null);
@@ -182,6 +214,8 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
                 onPress={() => {
                   setAdding(false);
                   setForGroup(null);
+                  setBookingFrom(null);
+                  setForRequest(null);
                 }}
                 style={styles.btn}
               >
@@ -197,6 +231,56 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
         Book a paid coaching session or a check ride for one student. The student and instructor each get an email, and see
         it in the app after signing in on the My Day tab. Nobody can be booked twice at the same time.
       </Text>
+      {requests.length ? (
+        <View style={styles.paid}>
+          <Text style={styles.label}>Coaching requests: {requests.length}</Text>
+          <Text style={styles.paidSub}>Drivers who asked from the app. Book fills in their email; Decline tells them it's full.</Text>
+          {requests.map((r) => {
+            const reg = paid.find((p) => p.email === r.email);
+            return (
+              <View key={r.id}>
+                <View style={styles.paidRow}>
+                  <View style={styles.rowBody}>
+                    <Text style={styles.paidName}>{reg?.name || r.email}</Text>
+                    <Text style={styles.rowSub}>
+                      {[reg ? `paid for ${reg.coaching} in ClubReg` : 'not paid in ClubReg yet', r.note].filter(Boolean).join(' · ')}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => startBooking(reg ?? { name: '', email: r.email, run_group: null, coaching: 0 }, r.id)}
+                    style={[styles.btn, styles.btnPrimary]}
+                  >
+                    <Text style={[styles.btnText, styles.btnTextPrimary]}>Book</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setDeclining(declining === r.id ? null : r.id)} style={styles.remove}>
+                    <Text style={styles.removeText}>Decline</Text>
+                  </Pressable>
+                </View>
+                {declining === r.id ? (
+                  <View style={styles.confirm}>
+                    <Text style={styles.confirmText}>Decline {r.email}'s request? They get an email and alert saying coaching is full.</Text>
+                    <View style={styles.actions}>
+                      <Pressable
+                        onPress={() => {
+                          setDeclining(null);
+                          answer(r.id, 'declined');
+                        }}
+                        style={[styles.btn, styles.btnDanger]}
+                      >
+                        <Text style={styles.btnText}>Yes, decline</Text>
+                      </Pressable>
+                      <Pressable onPress={() => setDeclining(null)} style={styles.btn}>
+                        <Text style={styles.btnText}>Keep it</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : null}
+                {adding && bookingFrom === `request:${r.id}` ? form : null}
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
       {needs.length ? (
         <View style={styles.paid}>
           <Text style={styles.label}>
@@ -220,7 +304,7 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
                 <Text style={styles.done}>✓</Text>
               )}
             </View>
-            {adding && bookingFrom === p.email ? form : null}
+            {adding && bookingFrom === `paid:${p.email}` ? form : null}
             </View>
           ))}
         </View>

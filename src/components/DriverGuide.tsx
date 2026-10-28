@@ -99,6 +99,13 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
           cancelled, and reminds you 15 minutes before it starts to pair with your instructor. Once it ends it drops off My
           Day (tap Show finished today to see it again).
         </Body>
+        <Body>
+          Want a coach? Sign in on My Day and tap Request coaching. It shows the price first ($100 per session at Just
+          Track It, paid through ClubReg's Advanced Coaching option) and that it's subject to availability. Add a note
+          like "Saturday afternoon" if you like and tap Send request. The organizers book you if there's room: you get
+          the usual booking email and alert, or an email saying coaching is full. You can withdraw a request until it's
+          booked.
+        </Body>
       </Section>
 
       <Section title="Stay in the loop">
