@@ -311,6 +311,9 @@ async function organizerEmails(clubId: string): Promise<string[]> {
   return [...new Set(emails.filter(Boolean))];
 }
 
+/** What an app coaching request costs, paid at the event's registration (as COACHING_OFFER in src/lib/coaching.ts). */
+const COACHING_PRICE: Record<string, string> = { 'just-track-it': '$100' };
+
 type CoachingRequest = { event_id: string; email: string; note: string | null; status: string };
 
 /** A driver asked for coaching (tell the organizers), or an organizer declined it (tell the driver). */
@@ -322,7 +325,10 @@ async function coachingRequest(input: { type: string; record: CoachingRequest })
   if (input.type === 'INSERT') {
     const { data: paid } = await db.from('event_roster').select('name, coaching').eq('event_id', r.event_id).eq('email', r.email).maybeSingle();
     const who = paid?.name ? `${paid.name} (${r.email})` : r.email;
-    const clubReg = !paid ? '' : paid.coaching ? `Paid for ${paid.coaching} coaching in ClubReg.` : 'Not paid for coaching in ClubReg yet.';
+    const price = COACHING_PRICE[event.club_id];
+    const clubReg = paid?.coaching
+      ? `Already paid for ${paid.coaching} coaching in ClubReg.`
+      : `Not paid yet: if you book them, collect ${price ?? 'payment'} at registration.`;
     const organizers = await organizerEmails(event.club_id);
     for (const email of organizers)
       await pushTo(await phonesOf(email), { title: `Coaching request · ${event.name}`, body: `${who}${r.note ? `: ${r.note}` : ''}`, tag: `request-${r.email}` });
@@ -335,9 +341,22 @@ async function coachingRequest(input: { type: string; record: CoachingRequest })
         html:
           `<p><b>${escape(who)}</b> asked for a coaching session at ${escape(event.name)}.</p>` +
           (r.note ? `<p>Note: ${escape(r.note)}</p>` : '') +
-          (clubReg ? `<p>${clubReg}</p>` : '') +
+          `<p>${clubReg}</p>` +
           `<p>Book or decline it in <a href="${APP_URL}admin">Admin → Coaching</a>.</p>`,
       });
+  } else if (r.status === 'booked') {
+    // The booking email itself comes from notify-coaching; this adds how to pay unless they paid in ClubReg.
+    const { data: paid } = await db.from('event_roster').select('coaching').eq('event_id', r.event_id).eq('email', r.email).maybeSingle();
+    const price = COACHING_PRICE[event.club_id];
+    if (paid?.coaching || !price) return;
+    await gmail().sendMail({
+      from: `"${event.name.replace(/["<>]/g, '')} via Track Session Minder" <${from}>`,
+      to: r.email,
+      subject: `Coaching at ${event.name}: pay at registration`,
+      html:
+        `<p>Your coaching request at ${escape(event.name)} is booked. The session details are in the booking email and on the app's My Day tab.</p>` +
+        `<p>Please pay ${escape(price)} at registration before your session.</p>`,
+    });
   } else if (r.status === 'declined') {
     const body = `Sorry, coaching at ${event.name} is full, so we couldn't book you a session.`;
     await pushTo(await phonesOf(r.email), { title: event.name, body, tag: `request-${r.email}` });

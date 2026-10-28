@@ -67,7 +67,7 @@ export function CoachingRequestCard({ email }: { email: string }) {
         <Text style={styles.title}>Coaching at {event.name}</Text>
         <Text style={styles.sub}>
           {request.status === 'booked'
-            ? 'Booked. Your session shows below, and you got an email.'
+            ? `Booked. Your session shows above, and you got an email.${offer ? ` Pay ${offer.amount} at registration before your session.` : ''}`
             : "Requested. The organizers will book you if there's room; you'll get an email and an alert either way."}
           {request.note ? `\nYour note: ${request.note}` : ''}
         </Text>

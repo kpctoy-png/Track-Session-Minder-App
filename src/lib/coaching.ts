@@ -55,7 +55,11 @@ export function findClash(
   return undefined;
 }
 
-/** What a club tells drivers before they ask for coaching: the price and how to pay. */
-export const COACHING_OFFER: Record<string, { price: string; pay: string }> = {
-  'just-track-it': { price: '$100 per session', pay: "Pay through ClubReg's Advanced Coaching option." },
+/**
+ * What a club tells drivers who ask for coaching in the app: the price and how to pay. Requests made in the app are
+ * paid at the event's registration (ClubReg takes no payments once the event starts). Keep the amounts in
+ * step with COACHING_PRICE in supabase/functions/push-schedule.
+ */
+export const COACHING_OFFER: Record<string, { amount: string; price: string; pay: string }> = {
+  'just-track-it': { amount: '$100', price: '$100 per session', pay: "Pay at registration once you're booked." },
 };
