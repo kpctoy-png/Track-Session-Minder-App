@@ -120,8 +120,14 @@ async function login(page: import('playwright').Page) {
   console.log(`Signed in (${new URL(page.url()).pathname}${session.params ? ', session on the address' : ''})`);
 }
 
-/** Columns to tick in Report Builder (the rest are left as they are). */
-const COLUMNS = [/^e-?mail/i, /^first ?name/i, /^last ?name/i, /^name$/i, /^status$/i, /^run ?group/i, /coaching/i];
+/**
+ * Columns to tick in Report Builder (the rest are left as they are). Name and Status always come with the
+ * export. Each extra option (Advanced Coaching among them) has its own Quantity and Wait List boxes, labelled
+ * only that way, so all of them are ticked and the reader keeps the coaching ones by their column heading.
+ */
+const COLUMNS = [/^e-?mail/i, /^first ?name/i, /^last ?name/i, /^name$/i, /^run ?group/i, /coaching/i, /^quantity$/i, /^wait ?list$/i];
+/** Registration statuses to include: people who are coming, not those cancelled or on the wait list. */
+const STATUSES: Record<string, boolean> = { confirmed: true, pending: true, 'wait listed': false, cancelled: false };
 
 async function exportList(page: import('playwright').Page, clubregEventId: string): Promise<string> {
   // Opening the event makes it ClubReg's current event, which Reports works on.
@@ -140,6 +146,12 @@ async function exportList(page: import('playwright').Page, clubregEventId: strin
   const ticked: string[] = [];
   let first: import('playwright').Locator | null = null;
   for (const [i, label] of labels.entries()) {
+    const status = STATUSES[label.toLowerCase()];
+    if (status !== undefined) {
+      const box = page.locator('input[type=checkbox]').nth(i);
+      if ((await box.isVisible()) && (await box.isChecked()) !== status) await box.setChecked(status);
+      continue;
+    }
     if (!COLUMNS.some((c) => c.test(label))) continue;
     const box = page.locator('input[type=checkbox]').nth(i);
     if (!(await box.isVisible())) continue;
