@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { applySuggestion, checkGrammar, type Suggestion } from '@/lib/grammar';
+import { applySuggestion, basicChecks, checkGrammar, type Suggestion } from '@/lib/grammar';
 import { colors } from './theme';
 
 /** A "Check spelling and grammar" link under a text box, listing each suggestion with tap-to-fix buttons. */
@@ -24,7 +24,10 @@ export function GrammarCheck({ text, onChange }: { text: string; onChange: (text
       setFound(await checkGrammar(text));
       setChecked(text);
     } catch {
-      setError("Couldn't reach the checker. Try again in a minute.");
+      // Offline or the service is busy: still offer the capital letter and full stop checks.
+      setFound(basicChecks(text));
+      setChecked(text);
+      setError("Couldn't reach the full checker, so only capitals and the full stop were checked. Try again in a minute.");
     }
     setChecking(false);
   };
