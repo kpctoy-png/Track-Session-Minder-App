@@ -50,13 +50,14 @@ export function AnnouncementAdmin({
   const [recovery, setRecovery] = useState<Recovery | null>(null);
   /** Registered drivers by run group: how many have an email, and their cell numbers. */
   const [roster, setRoster] = useState<{ group: string; count: number; phones: string[] }[]>([]);
-  const [emailToo, setEmailToo] = useState(true);
-  const [textToo, setTextToo] = useState(true);
+  // How it goes out: nothing is ticked until the organizer picks at least one.
+  const [emailToo, setEmailToo] = useState(false);
+  const [textToo, setTextToo] = useState(false);
   /** Texts waiting for the organizer to send from their iPhone with the Text Drivers shortcut. */
   const [textBatch, setTextBatch] = useState<{ message: string; phones: string[] } | null>(null);
   /** Run groups to email; null emails everyone registered. */
   const [groups, setGroups] = useState<string[] | null>(null);
-  const [inApp, setInApp] = useState(true);
+  const [inApp, setInApp] = useState(false);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   // After an icon is tapped, put the cursor back in the message so the organizer can finish it.
   const focusMessage = () => setTimeout(() => input.current?.focus(), 0);
@@ -64,7 +65,9 @@ export function AnnouncementAdmin({
   useEffect(() => {
     setRoster([]);
     setGroups(null);
-    setInApp(true);
+    setInApp(false);
+    setTextToo(false);
+    setEmailToo(false);
     supabase
       ?.from('event_roster')
       .select('run_group, email, phone')
@@ -79,10 +82,6 @@ export function AnnouncementAdmin({
         }
         const next = [...byGroup].map(([group, g]) => ({ group, ...g })).sort((a, b) => a.group.localeCompare(b.group));
         setRoster(next);
-        // Drivers would rather get a text than an email, so texting is the default once there are numbers.
-        const hasPhones = next.some((g) => g.phones.length);
-        setTextToo(hasPhones);
-        setEmailToo(!hasPhones);
       });
   }, [event.id, rosterVersion]);
 
@@ -96,16 +95,13 @@ export function AnnouncementAdmin({
   const allPhones = roster.reduce((n, g) => n + g.phones.length, 0);
   const texting = !everyone && textToo && phones.length > 0;
   const reaching = emailing || texting;
-  // The app and phone alerts can be skipped only when the message is going out by email or text instead.
-  const showing = inApp || !reaching;
+  const showing = inApp || everyone;
   const audience = everyone ? 'every driver, on every event' : `every driver following ${event.name}`;
   const emailWho = groups ? `${emailCount} registered ${groups.join(' / ')} drivers` : `${registered} registered drivers`;
 
   const toggleGroup = (group: string) => {
     const next = groups?.includes(group) ? groups.filter((g) => g !== group) : [...(groups ?? []), group];
     setGroups(next.length ? next : null);
-    // A message for some run groups usually isn't for every driver's screen.
-    setInApp(!next.length);
     setConfirming(false);
   };
 
@@ -125,6 +121,10 @@ export function AnnouncementAdmin({
     setBusy(false);
     setConfirming(false);
     setMessage('');
+    setInApp(false);
+    setTextToo(false);
+    setEmailToo(false);
+    setGroups(null);
     // Event name on top and the club's name at the bottom, so drivers know who is texting from an unsaved number.
     const club = clubs.find((c) => c.id === event.clubId)?.name;
     if (texting) setTextBatch({ message: [event.name, announcementText(text), club ? `– ${club}` : ''].filter(Boolean).join('\n'), phones });
@@ -235,67 +235,55 @@ export function AnnouncementAdmin({
           </View>
         </>
       ) : null}
-      {!everyone && allPhones > 0 ? (
-        <Pressable
-          onPress={() => {
-            setTextToo(!textToo);
-            setConfirming(false);
-          }}
-          style={styles.check}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: textToo }}
-        >
-          <Text style={styles.checkBox}>{textToo ? '☑' : '☐'}</Text>
-          <Text style={styles.checkText}>Also text the {allPhones === 1 ? '1 driver' : `${allPhones} drivers`} with a cell number (from your iPhone)</Text>
-        </Pressable>
-      ) : null}
-      {!everyone && registered > 0 ? (
-        <Pressable
-          onPress={() => {
-            setEmailToo(!emailToo);
-            setConfirming(false);
-          }}
-          style={styles.check}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: emailToo }}
-        >
-          <Text style={styles.checkBox}>{emailToo ? '☑' : '☐'}</Text>
-          <Text style={styles.checkText}>Also email the {registered === 1 ? '1 registered driver' : `${registered} registered drivers`}</Text>
-        </Pressable>
-      ) : null}
-      {reaching ? (
+      {everyone ? null : (
         <>
-          {named.length > 0 && roster.length > 1 ? (
-            <>
-              <Text style={styles.label}>{texting && !emailing ? 'Text which run groups' : emailing && !texting ? 'Email which run groups' : 'Which run groups'}</Text>
-              <View style={styles.buttons}>
-                <Btn
-                  label={`All (${registered})`}
-                  selected={!groups}
-                  onPress={() => {
-                    setGroups(null);
-                    setInApp(true);
-                    setConfirming(false);
-                  }}
-                />
-                {named.map((g) => (
-                  <Btn key={g.group} label={`${g.group} (${g.count})`} selected={!!groups?.includes(g.group)} onPress={() => toggleGroup(g.group)} />
-                ))}
-              </View>
-            </>
-          ) : null}
-          <Pressable
+          <Text style={styles.label}>How to send it (pick one or more)</Text>
+          <Check
+            checked={inApp}
+            label="Show it in the app and alert every driver's phone"
             onPress={() => {
               setInApp(!inApp);
               setConfirming(false);
             }}
-            style={styles.check}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: inApp }}
-          >
-            <Text style={styles.checkBox}>{inApp ? '☑' : '☐'}</Text>
-            <Text style={styles.checkText}>Also show it in the app and alert every driver's phone</Text>
-          </Pressable>
+          />
+          {allPhones > 0 ? (
+            <Check
+              checked={textToo}
+              label={`Text the ${plural(allPhones)} with a cell number (from your iPhone)`}
+              onPress={() => {
+                setTextToo(!textToo);
+                setConfirming(false);
+              }}
+            />
+          ) : null}
+          {registered > 0 ? (
+            <Check
+              checked={emailToo}
+              label={`Email the ${registered === 1 ? '1 registered driver' : `${registered} registered drivers`}`}
+              onPress={() => {
+                setEmailToo(!emailToo);
+                setConfirming(false);
+              }}
+            />
+          ) : null}
+        </>
+      )}
+      {reaching && named.length > 0 && roster.length > 1 ? (
+        <>
+          <Text style={styles.label}>{texting && !emailing ? 'Text which run groups' : emailing && !texting ? 'Email which run groups' : 'Which run groups'}</Text>
+          <View style={styles.buttons}>
+            <Btn
+              label={`All (${registered})`}
+              selected={!groups}
+              onPress={() => {
+                setGroups(null);
+                setConfirming(false);
+              }}
+            />
+            {named.map((g) => (
+              <Btn key={g.group} label={`${g.group} (${g.count})`} selected={!!groups?.includes(g.group)} onPress={() => toggleGroup(g.group)} />
+            ))}
+          </View>
         </>
       ) : null}
       {confirming ? (
@@ -314,7 +302,12 @@ export function AnnouncementAdmin({
           <Btn
             label="Send announcement"
             primary
-            onPress={() => (message.trim() ? setConfirming(true) : setProblem('Type a message first.'))}
+            onPress={() => {
+              if (!message.trim()) return setProblem('Type a message first.');
+              if (!showing && !reaching) return setProblem('Pick how to send it: in the app, by text or by email.');
+              setProblem(null);
+              setConfirming(true);
+            }}
           />
         </View>
       )}
@@ -329,6 +322,15 @@ export function AnnouncementAdmin({
     if (showing) return `Show this to ${audience}, alert their phones${also}?`;
     return `${extras.join(' and ').replace(/^./, (c) => c.toUpperCase())}? It won't show in the app.`;
   }
+}
+
+function Check({ checked, label, onPress }: { checked: boolean; label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.check} accessibilityRole="checkbox" accessibilityState={{ checked }}>
+      <Text style={styles.checkBox}>{checked ? '☑' : '☐'}</Text>
+      <Text style={styles.checkText}>{label}</Text>
+    </Pressable>
+  );
 }
 
 const plural = (n: number) => `${n} ${n === 1 ? 'driver' : 'drivers'}`;
