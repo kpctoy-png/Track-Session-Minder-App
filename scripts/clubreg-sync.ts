@@ -57,6 +57,12 @@ async function describe(page: import('playwright').Page): Promise<string> {
   return `page ${page.url().split('?')[0]} "${await page.title()}"\n  ${shape.fields.join('\n  ')}\n  links: ${shape.links.join(' | ')}`;
 }
 
+/** Short messages shown on the page, such as a login error (no form values). */
+async function notice(page: import('playwright').Page): Promise<string> {
+  const text = await page.locator('.error, .alert, .message, .warning, font[color], [class*=error i], [class*=alert i]').allTextContents();
+  return text.map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean).join(' | ').slice(0, 300) || '(no message)';
+}
+
 async function login(page: import('playwright').Page) {
   await page.goto(`${CLUBREG}/club_admin/`, { waitUntil: 'domcontentloaded' });
   let password = page.locator('input[type=password]').first();
@@ -70,12 +76,17 @@ async function login(page: import('playwright').Page) {
   }
   if (!(await password.count())) throw new Error(`Couldn't find ClubReg's login form.\n${await describe(page)}`);
   const form = password.locator('xpath=ancestor::form[1]');
-  await form.locator('input[type=email], input[type=text]').first().fill(CLUBREG_EMAIL ?? '');
-  await password.fill(CLUBREG_PASSWORD ?? '');
-  await password.press('Enter');
+  // Secrets pasted into GitHub often carry a trailing line break.
+  await form.locator('input[type=email], input[type=text]').first().fill((CLUBREG_EMAIL ?? '').trim());
+  await password.fill((CLUBREG_PASSWORD ?? '').replace(/[\r\n]+$/, ''));
+  const submit = form.locator('input[type=submit], button[type=submit], button:not([type]), input[type=image]').first();
+  const navigated = page.waitForNavigation({ timeout: 20_000 }).catch(() => {});
+  if (await submit.count()) await submit.click();
+  else await password.press('Enter');
+  await navigated;
   await page.waitForLoadState('networkidle');
   if (await page.locator('input[type=password]').count())
-    throw new Error('ClubReg login failed. Check the CLUBREG_EMAIL and CLUBREG_PASSWORD secrets in GitHub.');
+    throw new Error(`ClubReg login failed. Check the CLUBREG_EMAIL and CLUBREG_PASSWORD secrets in GitHub.\n${await describe(page)}\n  says: ${await notice(page)}`);
 }
 
 /** Columns to tick in Report Builder (the rest are left as they are). */
