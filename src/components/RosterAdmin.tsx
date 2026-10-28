@@ -239,7 +239,7 @@ function ClubRegLink({ eventId }: { eventId: string }) {
         </>
       )}
       {problem ? <Text style={styles.danger}>{problem}</Text> : null}
-      {pulls.map((p) => (
+      {shownPulls(pulls).map((p) => (
         <Text key={p.at} style={[styles.detail, p.problem ? styles.pullProblem : null]}>
           {new Date(p.at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })} ·{' '}
           {p.problem ?? [`${p.total} drivers`, changes('new', p.added), changes('cancelled', p.removed)].filter(Boolean).join(' · ')}
@@ -249,7 +249,15 @@ function ClubRegLink({ eventId }: { eventId: string }) {
   );
 }
 
-const changes = (what: string, names: string[]) => (names.length ? `${names.length} ${what}: ${names.join(', ')}` : '');
+/** Up to 8 names, otherwise just how many (the first pull "adds" everyone). */
+const changes = (what: string, names: string[]) =>
+  !names.length ? '' : names.length > 8 ? `${names.length} ${what}` : `${names.length} ${what}: ${names.join(', ')}`;
+
+/** The last three pulls; a failure only shows while no later pull has worked. */
+function shownPulls(pulls: Pull[]): Pull[] {
+  const worked = pulls.findIndex((p) => !p.problem);
+  return pulls.filter((p, i) => !p.problem || worked < 0 || i < worked).slice(0, 3);
+}
 
 const paidFor = (rows: RosterRow[]) => rows.filter((r) => r.coaching).length;
 
