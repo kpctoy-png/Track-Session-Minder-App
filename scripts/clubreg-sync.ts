@@ -76,6 +76,15 @@ async function login(page: import('playwright').Page) {
   }
   if (!(await password.count())) throw new Error(`Couldn't find ClubReg's login form.\n${await describe(page)}`);
   const form = password.locator('xpath=ancestor::form[1]');
+  // ClubReg's login asks for an Account Type (driver or club); the events are under the club account.
+  const accountType = form.locator('select[name=account_type]');
+  if (await accountType.count()) {
+    const options = await accountType.locator('option').evaluateAll((os) => os.map((o) => ({ value: (o as HTMLOptionElement).value, label: o.textContent?.trim() ?? '' })));
+    console.log(`Account types: ${options.map((o) => `${o.label} (${o.value})`).join(', ')}`);
+    const wanted = new RegExp(process.env.CLUBREG_ACCOUNT_TYPE || 'club|organi[sz]|admin', 'i');
+    const club = options.find((o) => o.value && wanted.test(o.label));
+    if (club) await accountType.selectOption(club.value);
+  }
   // Secrets pasted into GitHub often carry a trailing line break.
   await form.locator('input[type=email], input[type=text]').first().fill((CLUBREG_EMAIL ?? '').trim());
   await password.fill((CLUBREG_PASSWORD ?? '').replace(/[\r\n]+$/, ''));
