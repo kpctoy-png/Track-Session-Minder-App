@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AppState, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { BookingKind } from '@/data/types';
 import { bookingName, COACHING_OFFER, coachingTimes, findClash, isEmail } from '@/lib/coaching';
@@ -73,13 +73,24 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
 
   useEffect(() => {
     setRequests([]);
-    supabase
-      ?.from('coaching_requests')
-      .select('id, email, note, paid, created_at')
-      .eq('event_id', event.id)
-      .eq('status', 'open')
-      .order('created_at')
-      .then(({ data }) => setRequests(data ?? []));
+    const load = () =>
+      supabase
+        ?.from('coaching_requests')
+        .select('id, email, note, paid, created_at')
+        .eq('event_id', event.id)
+        .eq('status', 'open')
+        .order('created_at')
+        .then(({ data, error }) => !error && setRequests(data ?? []));
+    load();
+    // New requests come in while the organizer has Admin open: check every 30 seconds while the page is in view,
+    // and straight away when they come back to it.
+    const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible';
+    const timer = setInterval(() => visible() && load(), 30_000);
+    const appState = AppState.addEventListener('change', (state) => state === 'active' && load());
+    return () => {
+      clearInterval(timer);
+      appState.remove();
+    };
   }, [event.id, rosterVersion]);
 
   const answer = async (id: string, status: 'booked' | 'declined') => {
