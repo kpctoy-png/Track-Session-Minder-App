@@ -7,6 +7,7 @@ import { runGroupFor } from '@/lib/roster';
 import { formatRange, formatTime, sortItems } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { supabase } from '@/lib/supabase';
+import { GrammarCheck } from './GrammarCheck';
 import { colors } from './theme';
 
 interface Request {
@@ -221,6 +222,7 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
               value={notes}
               onChangeText={setNotes}
             />
+            <GrammarCheck text={notes} onChange={setNotes} />
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <View style={styles.actions}>
               <Pressable onPress={save} style={[styles.btn, styles.btnPrimary]} disabled={busy}>
