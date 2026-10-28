@@ -185,14 +185,51 @@ async function exportList(page: import('playwright').Page, clubregEventId: strin
   });
 }
 
+/** The club's events as ClubReg lists them to a signed-in organizer: number, and the text of the row it's in (no driver data). */
+async function clubEvents(page: import('playwright').Page): Promise<{ id: string; text: string }[]> {
+  const found = new Map<string, string>();
+  for (const path of ['/club_admin/', '/club_admin/event_management/', '/club_admin/event_management/index.cfm']) {
+    await page.goto(signedIn(path), { waitUntil: 'networkidle' }).catch(() => {});
+    console.log(`Looked at ${new URL(page.url()).pathname} "${await page.title()}"`);
+    const rows = await page.locator('a[href*="event_id=" i], a[href*="/event/" i]').evaluateAll((links) =>
+      links.map((a) => {
+        const href = (a as HTMLAnchorElement).href;
+        const id = /event_id=(\d+)/i.exec(href)?.[1] ?? /\/event\/(\d+)/i.exec(href)?.[1] ?? '';
+        const row = a.closest('tr, li, .event, [class*=event i]') ?? a.parentElement;
+        return { id, text: ((row as HTMLElement | null)?.innerText ?? a.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200) };
+      }),
+    );
+    for (const r of rows) if (r.id && !found.has(r.id)) found.set(r.id, r.text);
+  }
+  return [...found].map(([id, text]) => ({ id, text }));
+}
+
 async function main() {
   if (process.argv.includes('--check')) {
+    if (process.env.DISCOVER === 'true') {
+      if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, 'due=1\n');
+      return;
+    }
     const list = MANUAL === 'true' || inPullHour() ? await due() : [];
     console.log(list.length ? `Due: ${list.map((d) => d.name).join(', ')}` : 'Nothing due now.');
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `due=${list.length}\n`);
     return;
   }
   if (!CLUBREG_EMAIL || !CLUBREG_PASSWORD) throw new Error('Add the CLUBREG_EMAIL and CLUBREG_PASSWORD secrets in GitHub.');
+  if (process.env.DISCOVER === 'true') {
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch();
+    try {
+      const page = await (await browser.newContext()).newPage();
+      await login(page);
+      const events = await clubEvents(page);
+      console.log(`ClubReg events (${events.length}):\n  ${events.map((e) => `${e.id}: ${e.text}`).join('\n  ')}`);
+      if (!events.length) console.log(await describe(page));
+    } finally {
+      await browser.close();
+    }
+    return;
+  }
   const list = await due();
   const { chromium } = await import('playwright');
   const browser = await chromium.launch();

@@ -17,6 +17,10 @@ on:
         description: Pull every linked event that hasn't ended, not just those within two days
         type: boolean
         default: true
+      discover:
+        description: Only list the club's ClubReg events (to check how they're found)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,6 +36,7 @@ jobs:
       ROSTER_SYNC_TOKEN: ${{ secrets.ROSTER_SYNC_TOKEN }}
       MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
       ALL: ${{ inputs.all || false }}
+      DISCOVER: ${{ inputs.discover || false }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
