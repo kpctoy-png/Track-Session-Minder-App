@@ -137,16 +137,25 @@ async function exportList(page: import('playwright').Page, clubregEventId: strin
       return (own || next || parent || box.name || '').replace(/\s+/g, ' ').trim();
     }),
   );
-  let ticked = 0;
+  const ticked: string[] = [];
+  let first: import('playwright').Locator | null = null;
   for (const [i, label] of labels.entries()) {
     if (!COLUMNS.some((c) => c.test(label))) continue;
     const box = page.locator('input[type=checkbox]').nth(i);
+    if (!(await box.isVisible())) continue;
     if (!(await box.isChecked())) await box.check();
-    ticked++;
+    ticked.push(label);
+    first ??= box;
   }
-  if (!ticked) throw new Error(`Couldn't find Report Builder's Email column.\n${await describe(page)}`);
-  const button = page.locator('input[type=submit][value*="Export" i], input[type=button][value*="Export" i], button:has-text("Export"), a:has-text("Export")').first();
+  if (!first) throw new Error(`Couldn't find Report Builder's Email column.\n${await describe(page)}`);
+  console.log(`Report Builder columns ticked: ${ticked.join(', ')}`);
+  // Report Builder's own Export, in the same form as its columns (the menu has a hidden "Export All Registrants").
+  const exportButton = 'input[type=submit][value*="Export" i]:visible, input[type=button][value*="Export" i]:visible, button:has-text("Export"):visible, a:has-text("Export"):visible';
+  const form = first.locator('xpath=ancestor::form[1]');
+  let button = form.locator(exportButton).first();
+  if (!(await form.count()) || !(await button.count())) button = page.locator(exportButton).last();
   if (!(await button.count())) throw new Error(`Couldn't find Report Builder's Export button.\n${await describe(page)}`);
+  console.log(`Export button: ${(await button.evaluate((el) => `${el.tagName.toLowerCase()} "${(el as HTMLInputElement).value || el.textContent || ''}"`.trim())).slice(0, 80)}`);
   // The export is a download, but allow for it opening in a new tab or replacing the page.
   const download = page.waitForEvent('download', { timeout: 60_000 }).then(async (d) => readFileSync((await d.path())!, 'utf8'));
   const popup = page.context().waitForEvent('page', { timeout: 60_000 }).then(async (p) => (await p.waitForLoadState(), p.content()));
@@ -155,6 +164,8 @@ async function exportList(page: import('playwright').Page, clubregEventId: strin
     if (!/<table/i.test(html) || !/e-?mail/i.test(html)) throw new Error('not the export');
     return html;
   });
+  // Whichever way the file comes, the other waits end in a rejection that nothing else is listening for.
+  for (const wait of [download, popup, same]) wait.catch(() => {});
   await button.click();
   return Promise.any([download, popup, same]).catch(async () => {
     throw new Error(`Report Builder's Export didn't give a file.\n${await describe(page)}`);
