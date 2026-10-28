@@ -258,6 +258,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       loadAnnouncements();
     };
     let connections = 0;
+    let live = false;
     const loadAnnouncements = () => fetchAnnouncements().then((rows) => !cancelled && setAnnouncements(rows), () => {});
 
     reload();
@@ -281,9 +282,15 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
         fetchCoaching().then(setCoaching, () => {}),
       )
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED' && connections++ > 0) catchUp();
+        live = status === 'SUBSCRIBED';
+        if (live && connections++ > 0) catchUp();
       });
     const appState = AppState.addEventListener('change', (state) => state === 'active' && catchUp());
+    // When live updates can't connect (no signal, or the database's connection limit is full at a big event),
+    // check for changes once a minute instead, while the app is open.
+    const fallback = setInterval(() => {
+      if (!live && AppState.currentState === 'active') catchUp();
+    }, 60_000);
 
     client.auth.getSession().then(({ data }) => !cancelled && setSession(data.session));
     const { data: auth } = client.auth.onAuthStateChange((_event, next) => setSession(next));
@@ -292,6 +299,7 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       client.removeChannel(channel);
       client.removeChannel(announcementsChannel);
+      clearInterval(fallback);
       appState.remove();
       auth.subscription.unsubscribe();
     };
