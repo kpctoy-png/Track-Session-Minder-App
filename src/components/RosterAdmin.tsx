@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { rosterFromCsv, rosterFromTable, type RosterRow } from '@/lib/roster';
 import { supabase } from '@/lib/supabase';
@@ -91,6 +91,7 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
           <Text style={styles.btnText}>{rows?.length ? 'Upload a new list' : 'Upload participant list'}</Text>
         </Pressable>
       ) : null}
+      <ClubRegLink eventId={eventId} />
       {upload ? (
         <View style={styles.confirm}>
           <Text style={styles.confirmText}>
@@ -148,6 +149,108 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
   );
 }
 
+type Pull = { at: string; total: number | null; added: string[]; removed: string[]; problem: string | null };
+
+/**
+ * Links the event to its ClubReg event so the "ClubReg sync" robot pulls the list at 5:30 AM two days before,
+ * the day before and each morning of the event, and shows what each pull changed.
+ */
+function ClubRegLink({ eventId }: { eventId: string }) {
+  const [linked, setLinked] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [pulls, setPulls] = useState<Pull[]>([]);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [unlinking, setUnlinking] = useState(false);
+
+  useEffect(() => {
+    setLinked(null);
+    setDraft('');
+    setPulls([]);
+    setProblem(null);
+    setUnlinking(false);
+    supabase
+      ?.from('roster_sync')
+      .select('clubreg_event_id')
+      .eq('event_id', eventId)
+      .maybeSingle()
+      .then(({ data }) => setLinked(data?.clubreg_event_id ?? null));
+    supabase
+      ?.from('roster_pulls')
+      .select('at, total, added, removed, problem')
+      .eq('event_id', eventId)
+      .order('at', { ascending: false })
+      .limit(5)
+      .then(({ data }) => setPulls((data as Pull[] | null) ?? []));
+  }, [eventId]);
+
+  const link = async () => {
+    // Accepts the number, or a ClubReg link with the number at the end (signUp.cfm/event/16477).
+    const id = /(\d{3,10})\D*$/.exec(draft.trim())?.[1];
+    if (!id) return setProblem('Type the ClubReg event number, for example 16477.');
+    const { error } = await supabase!.from('roster_sync').upsert({ event_id: eventId, clubreg_event_id: id });
+    if (error) return setProblem(`Not saved: ${error.message}`);
+    setProblem(null);
+    setLinked(id);
+  };
+
+  const unlink = async () => {
+    await supabase?.from('roster_sync').delete().eq('event_id', eventId);
+    setUnlinking(false);
+    setLinked(null);
+  };
+
+  return (
+    <View style={styles.sync}>
+      <Text style={styles.syncTitle}>Pull from ClubReg automatically</Text>
+      {linked ? (
+        <>
+          <Text style={styles.detail}>
+            Linked to ClubReg event {linked}. Pulled at 5:30 AM two days before, the day before and each event morning.
+          </Text>
+          {unlinking ? (
+            <Pressable onPress={unlink}>
+              <Text style={styles.danger}>Stop pulling from ClubReg?</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => setUnlinking(true)}>
+              <Text style={styles.detail}>Unlink</Text>
+            </Pressable>
+          )}
+        </>
+      ) : (
+        <>
+          <Text style={styles.detail}>
+            Type the event's number from its ClubReg link (signUp.cfm/event/16477 → 16477). The list then updates itself
+            at 5:30 AM two days before, the day before and each event morning: new sign-ups added, cancellations removed.
+          </Text>
+          <View style={[styles.buttons, styles.linkRow]}>
+            <TextInput
+              style={styles.input}
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="ClubReg event number"
+              placeholderTextColor={colors.muted}
+              inputMode="numeric"
+            />
+            <Pressable onPress={link} style={[styles.small, styles.primary]}>
+              <Text style={styles.btnText}>Link</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
+      {problem ? <Text style={styles.danger}>{problem}</Text> : null}
+      {pulls.map((p) => (
+        <Text key={p.at} style={[styles.detail, p.problem ? styles.pullProblem : null]}>
+          {new Date(p.at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })} ·{' '}
+          {p.problem ?? [`${p.total} drivers`, changes('new', p.added), changes('cancelled', p.removed)].filter(Boolean).join(' · ')}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+const changes = (what: string, names: string[]) => (names.length ? `${names.length} ${what}: ${names.join(', ')}` : '');
+
 const paidFor = (rows: RosterRow[]) => rows.filter((r) => r.coaching).length;
 
 const styles = StyleSheet.create({
@@ -167,4 +270,9 @@ const styles = StyleSheet.create({
   detail: { color: colors.muted, fontSize: 13 },
   danger: { color: '#FF6961', fontWeight: '700', marginBottom: 8 },
   link: { color: colors.accent, fontWeight: '600', marginTop: 4 },
+  sync: { backgroundColor: colors.card, borderRadius: 12, padding: 12, marginBottom: 10, gap: 6 },
+  syncTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  linkRow: { alignItems: 'center', marginTop: 4 },
+  input: { flex: 1, backgroundColor: colors.cardRaised, color: colors.text, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 10, fontSize: 16 },
+  pullProblem: { color: '#FF6961' },
 });

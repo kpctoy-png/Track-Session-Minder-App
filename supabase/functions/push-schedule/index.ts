@@ -15,6 +15,12 @@
 // { action: 'email', eventId, message } emails an announcement to the event's registered
 // drivers (the event_roster list its organizers uploaded), after the same organizer check.
 //
+// The "ClubReg sync" GitHub Action calls it with the ROSTER_SYNC_TOKEN secret (set in both places):
+// { action: 'roster-due' } lists the events linked to ClubReg that are due a pull (from two days
+// before through the last day; with all: true, every linked event that hasn't ended), and
+// { action: 'roster-pull', eventId, rows } replaces that event's roster and logs who was added
+// and who cancelled. { action: 'roster-pull', eventId, problem } logs a failed pull and keeps the list.
+//
 // The alert keys are made here and kept in the push_config table, which only the service
 // role can read. Emails use the SMTP_USER and SMTP_PASS secrets already set for
 // notify-coaching. SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are
@@ -288,6 +294,61 @@ async function emailRoster(eventId: string, eventName: string, message: string, 
   return emails.length;
 }
 
+/** Whether the call carries the ROSTER_SYNC_TOKEN secret. */
+function fromSyncRobot(input: { token?: unknown }): boolean {
+  const secret = Deno.env.get('ROSTER_SYNC_TOKEN') ?? '';
+  const given = String(input.token ?? '');
+  if (secret.length < 20 || given.length !== secret.length) return false;
+  let diff = 0;
+  for (let i = 0; i < secret.length; i++) diff |= secret.charCodeAt(i) ^ given.charCodeAt(i);
+  return diff === 0;
+}
+
+const addDays = (date: string, days: number) => new Date(Date.parse(date + 'T12:00:00Z') + days * 86_400_000).toISOString().slice(0, 10);
+
+/** Linked events due a ClubReg pull today, in each track's time zone. */
+async function rosterDue(all: boolean) {
+  const { data: links } = await db.from('roster_sync').select('event_id, clubreg_event_id, events (name, time_zone, event_days (date))');
+  const due = [];
+  for (const l of (links ?? []) as unknown as { event_id: string; clubreg_event_id: string; events: { name: string; time_zone: string | null; event_days: { date: string }[] } | null }[]) {
+    const dates = (l.events?.event_days ?? []).map((d) => d.date).sort();
+    if (!dates.length) continue;
+    const today = localNow(l.events?.time_zone ?? 'America/New_York').date;
+    const last = dates[dates.length - 1];
+    if (today > last || (!all && today < addDays(dates[0], -2))) continue;
+    due.push({ eventId: l.event_id, clubregEventId: l.clubreg_event_id, name: l.events?.name ?? l.event_id });
+  }
+  return due;
+}
+
+type PulledRow = { name?: unknown; email?: unknown; runGroup?: unknown; coaching?: unknown };
+
+/** Replaces an event's roster with a fresh pull and logs the difference from the last list. */
+async function rosterPull(eventId: string, pulled: PulledRow[]) {
+  const rows = new Map<string, { event_id: string; name: string; email: string; run_group: string | null; coaching: number }>();
+  for (const r of pulled.slice(0, 2000)) {
+    const email = String(r.email ?? '').trim().toLowerCase().slice(0, 254);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) continue;
+    const coaching = Math.min(20, Math.max(0, Math.floor(Number(r.coaching) || 0)));
+    rows.set(email, { event_id: eventId, name: String(r.name ?? '').slice(0, 200), email, run_group: String(r.runGroup ?? '').slice(0, 60) || null, coaching });
+  }
+  if (!rows.size) {
+    await db.from('roster_pulls').insert({ event_id: eventId, problem: 'ClubReg returned no drivers, so the list was kept.' });
+    return { kept: true };
+  }
+  const { data: before } = await db.from('event_roster').select('name, email').eq('event_id', eventId);
+  const old = new Map((before ?? []).map((r) => [r.email as string, r.name as string]));
+  const label = (name: string, email: string) => name || email;
+  const added = [...rows.values()].filter((r) => !old.has(r.email)).map((r) => label(r.name, r.email));
+  const removed = [...old].filter(([email]) => !rows.has(email)).map(([email, name]) => label(name, email));
+  const del = await db.from('event_roster').delete().eq('event_id', eventId);
+  if (del.error) throw del.error;
+  const ins = await db.from('event_roster').insert([...rows.values()]);
+  if (ins.error) throw ins.error;
+  await db.from('roster_pulls').insert({ event_id: eventId, total: rows.size, added: added.slice(0, 100), removed: removed.slice(0, 100) });
+  return { total: rows.size, added: added.length, removed: removed.length };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return reply(405, { error: 'POST only' });
@@ -321,6 +382,19 @@ Deno.serve(async (req) => {
       if (!(await canManage(req, event.club_id))) return reply(403, { error: 'Not an organizer for this event' });
       const groups = Array.isArray(input.groups) ? input.groups.map(String).slice(0, 20) : undefined;
       return reply(200, { emailed: await emailRoster(eventId, event.name, message, groups?.length ? groups : undefined) });
+    }
+
+    if (input.action === 'roster-due' || input.action === 'roster-pull') {
+      if (!fromSyncRobot(input)) return reply(403, { error: 'Wrong or missing sync token' });
+      if (input.action === 'roster-due') return reply(200, { due: await rosterDue(!!input.all) });
+      const eventId = String(input.eventId ?? '');
+      const { data: link } = await db.from('roster_sync').select('event_id').eq('event_id', eventId).maybeSingle();
+      if (!link) return reply(400, { error: 'That event is not linked to ClubReg' });
+      if (input.problem) {
+        await db.from('roster_pulls').insert({ event_id: eventId, problem: String(input.problem).slice(0, 300) });
+        return reply(200, { logged: true });
+      }
+      return reply(200, await rosterPull(eventId, Array.isArray(input.rows) ? input.rows : []));
     }
 
     if (input.action === 'booking' || input.action === 'reminders') {

@@ -517,6 +517,37 @@ select cron.schedule('expire-rosters', '17 4 * * *', $cron$
   where (select max(d.date) from public.event_days d where d.event_id = r.event_id) < current_date - 7;
 $cron$);
 
+-- Automatic pulls of the roster from ClubReg (the "ClubReg sync" GitHub Action). Organizers link an event
+-- to its ClubReg event number; each pull is logged with who was added and who cancelled since the last one.
+create table if not exists roster_sync (
+  event_id text primary key references events (id) on delete cascade,
+  clubreg_event_id text not null check (clubreg_event_id ~ '^[0-9]{1,10}$')
+);
+alter table roster_sync enable row level security;
+drop policy if exists "Organizers manage their ClubReg link" on roster_sync;
+create policy "Organizers manage their ClubReg link" on roster_sync for all to authenticated
+  using (can_announce(event_id)) with check (can_announce(event_id));
+
+create table if not exists roster_pulls (
+  id uuid primary key default gen_random_uuid(),
+  event_id text not null references events (id) on delete cascade,
+  at timestamptz not null default now(),
+  total int,
+  added text[] not null default '{}',
+  removed text[] not null default '{}',
+  problem text check (length(problem) <= 300)
+);
+create index if not exists roster_pulls_event on roster_pulls (event_id, at desc);
+alter table roster_pulls enable row level security;
+drop policy if exists "Organizers read their pulls" on roster_pulls;
+create policy "Organizers read their pulls" on roster_pulls for select to authenticated
+  using (can_announce(event_id));
+
+select cron.schedule('expire-roster-pulls', '19 4 * * *', $cron$
+  delete from public.roster_pulls p
+  where (select max(d.date) from public.event_days d where d.event_id = p.event_id) < current_date - 7;
+$cron$);
+
 -- Send changes to phones as they happen.
 do $$
 begin

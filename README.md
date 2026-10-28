@@ -106,6 +106,16 @@ it includes Run Group and Advanced Coaching Quantity, Admin → Coaching lists
 who paid for coaching and how many of their sessions are booked, with a Book
 button that fills in the form.
 
+**ClubReg sync.** Under Registered drivers, organizers can link the event to its ClubReg
+event number. The `ClubReg sync` GitHub Action (`.github/workflows/clubreg-sync.yml`,
+`scripts/clubreg-sync.ts`) then runs at 5:15 AM Eastern, and from two days before the event
+through its last day logs in to ClubReg, exports Report Builder's list for each linked event
+and sends it to `push-schedule` (`roster-due` / `roster-pull` actions). That replaces the
+list and logs who was added and who cancelled (`roster_pulls`, shown in Admin). A failed or
+empty pull keeps the current list. Setup: repository secrets `CLUBREG_EMAIL`,
+`CLUBREG_PASSWORD` and `ROSTER_SYNC_TOKEN`, plus the same `ROSTER_SYNC_TOKEN` as an Edge
+Function secret in Supabase. Run it by hand from Actions → ClubReg sync → Run workflow.
+
 ### Phone alerts
 
 Drivers using the web version can tap Turn on alerts (top of Now, Schedule and My Day

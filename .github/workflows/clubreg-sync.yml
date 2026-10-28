@@ -1,0 +1,50 @@
+# Pulls each event's participant list from ClubReg at 5:30 AM Eastern (give or take GitHub's start
+# delay) two days before, the day before and each morning of the event, and updates Admin → Registered
+# drivers: new sign-ups added, cancellations removed. See scripts/clubreg-sync.ts.
+#
+# Needs these repository secrets: CLUBREG_EMAIL and CLUBREG_PASSWORD (the organizer's ClubReg login)
+# and ROSTER_SYNC_TOKEN (the same phrase as the Supabase Edge Function secret of that name).
+name: ClubReg sync
+
+on:
+  schedule:
+    # 5:15 AM in both summer (EDT) and winter (EST) time; the script runs only the one in the 5 AM hour.
+    - cron: '15 9 * * *'
+    - cron: '15 10 * * *'
+  workflow_dispatch:
+    inputs:
+      all:
+        description: Pull every linked event that hasn't ended, not just those within two days
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clubreg-sync
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ROSTER_SYNC_TOKEN: ${{ secrets.ROSTER_SYNC_TOKEN }}
+      MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+      ALL: ${{ inputs.all || false }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci && npm install --no-save tsx@4.23.15 playwright@1.63.0
+      - id: check
+        run: npx tsx scripts/clubreg-sync.ts --check
+      - if: steps.check.outputs.due != '0'
+        run: npx playwright install --with-deps chromium
+      - if: steps.check.outputs.due != '0'
+        run: npx tsx scripts/clubreg-sync.ts
+        env:
+          CLUBREG_EMAIL: ${{ secrets.CLUBREG_EMAIL }}
+          CLUBREG_PASSWORD: ${{ secrets.CLUBREG_PASSWORD }}
