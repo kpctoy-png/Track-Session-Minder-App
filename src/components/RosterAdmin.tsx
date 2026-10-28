@@ -233,8 +233,10 @@ function ClubRegLink({ eventId }: { eventId: string }) {
       ) : (
         <>
           <Text style={styles.detail}>
-            Type the event's number from its ClubReg link (signUp.cfm/event/16477 → 16477). The list then updates itself
-            at 5:30 AM two days before, the day before and each event morning: new sign-ups added, cancellations removed.
+            No need to do anything: two days before the event, the app finds it in ClubReg by its date and links it. The
+            list then updates itself at 5:30 AM two days before, the day before and each event morning: new sign-ups added,
+            cancellations removed. To link it sooner, or if it isn't found, type the number from its ClubReg link
+            (signUp.cfm/event/16477 → 16477).
           </Text>
           <View style={[styles.buttons, styles.linkRow]}>
             <TextInput

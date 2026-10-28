@@ -114,8 +114,11 @@ it includes Run Group and Advanced Coaching Quantity, Admin → Coaching lists
 who paid for coaching and how many of their sessions are booked, with a Book
 button that fills in the form.
 
-**ClubReg sync.** Under Registered drivers, organizers can link the event to its ClubReg
-event number (each ClubReg event can be linked to only one event). The `ClubReg sync` GitHub Action (`.github/workflows/clubreg-sync.yml`,
+**ClubReg sync.** Each event is linked to its ClubReg event number, found automatically: from two days
+before, the robot matches the club's unlinked events (`CLUBREG_CLUB`, default `just-track-it`) to ClubReg's
+Current Events list by start date (up to three days before the first day) and links the one match
+(`roster-link` action). Organizers can also type the number under Registered drivers (each ClubReg event
+can be linked to only one event). The `ClubReg sync` GitHub Action (`.github/workflows/clubreg-sync.yml`,
 `scripts/clubreg-sync.ts`) then runs at 5:15 AM Eastern, and from two days before the event
 through its last day logs in to ClubReg, exports Report Builder's list for each linked event
 and sends it to `push-schedule` (`roster-due` / `roster-pull` actions). That replaces the

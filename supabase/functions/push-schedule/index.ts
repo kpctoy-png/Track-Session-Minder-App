@@ -20,7 +20,9 @@
 //
 // The "ClubReg sync" GitHub Action calls it with the ROSTER_SYNC_TOKEN secret (set in both places):
 // { action: 'roster-due' } lists the events linked to ClubReg that are due a pull (from two days
-// before through the last day; with all: true, every linked event that hasn't ended), and
+// before through the last day; with all: true, every linked event that hasn't ended), plus the
+// club's events not linked yet (clubregEventId null, with their first and last day) so the robot
+// can find their ClubReg number by date and link them with { action: 'roster-link', eventId, clubregEventId };
 // { action: 'roster-pull', eventId, rows } replaces that event's roster and logs who was added
 // and who cancelled. { action: 'roster-pull', eventId, problem } logs a failed pull and keeps the list.
 //
@@ -382,16 +384,21 @@ function fromSyncRobot(input: { token?: unknown }): boolean {
 const addDays = (date: string, days: number) => new Date(Date.parse(date + 'T12:00:00Z') + days * 86_400_000).toISOString().slice(0, 10);
 
 /** Linked events due a ClubReg pull today, in each track's time zone. */
-async function rosterDue(all: boolean) {
-  const { data: links } = await db.from('roster_sync').select('event_id, clubreg_event_id, events (name, time_zone, event_days (date))');
+async function rosterDue(all: boolean, club: string) {
+  type Event = { id: string; name: string; time_zone: string | null; event_days: { date: string }[] };
+  const { data: links } = await db.from('roster_sync').select('event_id, clubreg_event_id');
+  const linked = new Map((links ?? []).map((l) => [l.event_id as string, l.clubreg_event_id as string]));
+  const { data: events } = await db.from('events').select('id, name, time_zone, club_id, event_days (date)');
   const due = [];
-  for (const l of (links ?? []) as unknown as { event_id: string; clubreg_event_id: string; events: { name: string; time_zone: string | null; event_days: { date: string }[] } | null }[]) {
-    const dates = (l.events?.event_days ?? []).map((d) => d.date).sort();
+  for (const e of (events ?? []) as unknown as (Event & { club_id: string })[]) {
+    const clubregEventId = linked.get(e.id) ?? null;
+    if (!clubregEventId && e.club_id !== club) continue;
+    const dates = e.event_days.map((d) => d.date).sort();
     if (!dates.length) continue;
-    const today = localNow(l.events?.time_zone ?? 'America/New_York').date;
+    const today = localNow(e.time_zone ?? 'America/New_York').date;
     const last = dates[dates.length - 1];
     if (today > last || (!all && today < addDays(dates[0], -2))) continue;
-    due.push({ eventId: l.event_id, clubregEventId: l.clubreg_event_id, name: l.events?.name ?? l.event_id });
+    due.push({ eventId: e.id, clubregEventId, name: e.name, first: dates[0], last });
   }
   return due;
 }
@@ -459,9 +466,20 @@ Deno.serve(async (req) => {
       return reply(200, { emailed: await emailRoster(eventId, event.name, message, groups?.length ? groups : undefined) });
     }
 
-    if (input.action === 'roster-due' || input.action === 'roster-pull') {
+    if (input.action === 'roster-due' || input.action === 'roster-pull' || input.action === 'roster-link') {
       if (!fromSyncRobot(input)) return reply(403, { error: 'Wrong or missing sync token' });
-      if (input.action === 'roster-due') return reply(200, { due: await rosterDue(!!input.all) });
+      if (input.action === 'roster-due') return reply(200, { due: await rosterDue(!!input.all, String(input.club ?? 'just-track-it')) });
+      if (input.action === 'roster-link') {
+        // Found by date: link it only if neither the event nor the ClubReg number is linked already.
+        const eventId = String(input.eventId ?? '');
+        const clubregEventId = String(input.clubregEventId ?? '');
+        if (!/^\d{3,10}$/.test(clubregEventId) || !/^[\w-]{1,100}$/.test(eventId)) return reply(400, { error: 'Bad event or ClubReg number' });
+        const { data: taken } = await db.from('roster_sync').select('event_id').or(`event_id.eq.${eventId},clubreg_event_id.eq.${clubregEventId}`).limit(1);
+        if (taken?.length) return reply(409, { error: 'Already linked' });
+        const { error } = await db.from('roster_sync').insert({ event_id: eventId, clubreg_event_id: clubregEventId });
+        if (error) return reply(400, { error: error.message });
+        return reply(200, { linked: true });
+      }
       const eventId = String(input.eventId ?? '');
       const { data: link } = await db.from('roster_sync').select('event_id').eq('event_id', eventId).maybeSingle();
       if (!link) return reply(400, { error: 'That event is not linked to ClubReg' });
