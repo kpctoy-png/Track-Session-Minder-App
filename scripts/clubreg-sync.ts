@@ -63,6 +63,21 @@ async function notice(page: import('playwright').Page): Promise<string> {
   return text.map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean).join(' | ').slice(0, 300) || '(no message)';
 }
 
+/**
+ * Where the signed-in session lives: ClubReg may move between www.clubregistration.net and
+ * clubregistration.net (cookies don't carry over), and ColdFusion may keep the session in CFID/CFTOKEN
+ * on the URL instead of a cookie.
+ */
+let session = { origin: CLUBREG, params: '' };
+const signedIn = (path: string) => `${session.origin}${path}${session.params ? (path.includes('?') ? '&' : '?') + session.params : ''}`;
+
+function rememberSession(url: string) {
+  const u = new URL(url);
+  const params = new URLSearchParams();
+  for (const [key, value] of u.searchParams) if (/^(cfid|cftoken|jsessionid)$/i.test(key)) params.set(key, value);
+  session = { origin: u.origin, params: params.toString() };
+}
+
 async function login(page: import('playwright').Page) {
   await page.goto(`${CLUBREG}/club_admin/`, { waitUntil: 'domcontentloaded' });
   let password = page.locator('input[type=password]').first();
@@ -96,6 +111,13 @@ async function login(page: import('playwright').Page) {
   await page.waitForLoadState('networkidle');
   if (await page.locator('input[type=password]').count())
     throw new Error(`ClubReg login failed. Check the CLUBREG_EMAIL and CLUBREG_PASSWORD secrets in GitHub.\n${await describe(page)}\n  says: ${await notice(page)}`);
+  rememberSession(page.url());
+  // A session id may sit on the page's links rather than the address.
+  if (!session.params) {
+    const href = await page.locator('a[href*="CFID" i]').first().getAttribute('href', { timeout: 2000 }).catch(() => null);
+    if (href) rememberSession(new URL(href, page.url()).toString());
+  }
+  console.log(`Signed in (${new URL(page.url()).pathname}${session.params ? ', session on the address' : ''})`);
 }
 
 /** Columns to tick in Report Builder (the rest are left as they are). */
@@ -103,8 +125,9 @@ const COLUMNS = [/^e-?mail/i, /^first ?name/i, /^last ?name/i, /^name$/i, /^stat
 
 async function exportList(page: import('playwright').Page, clubregEventId: string): Promise<string> {
   // Opening the event makes it ClubReg's current event, which Reports works on.
-  await page.goto(`${CLUBREG}/club_admin/event_management/event_status.cfm?event_id=${clubregEventId}`, { waitUntil: 'networkidle' });
-  await page.goto(`${CLUBREG}/club_admin/reports/index.cfm`, { waitUntil: 'networkidle' });
+  await page.goto(signedIn(`/club_admin/event_management/event_status.cfm?event_id=${clubregEventId}`), { waitUntil: 'networkidle' });
+  await page.goto(signedIn('/club_admin/reports/index.cfm'), { waitUntil: 'networkidle' });
+  if (await page.locator('input[type=password]').count()) throw new Error(`ClubReg signed the robot out.\n${await describe(page)}`);
   const labels = await page.locator('input[type=checkbox]').evaluateAll((boxes) =>
     boxes.map((el) => {
       const box = el as HTMLInputElement;
