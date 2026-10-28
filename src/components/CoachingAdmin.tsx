@@ -45,6 +45,8 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // A first-name-only instructor match ("Mike" vs "Mike Smith") can be booked anyway with a second tap of Save.
+  const [bookAnyway, setBookAnyway] = useState<string | null>(null);
   // Removing sends the student and instructor an email and an alert, so it waits for a second tap.
   const [removing, setRemoving] = useState<string | null>(null);
   // Which Book button opened the form ("paid:<email>" or "request:<id>"), so it shows under that row.
@@ -168,15 +170,20 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
       notes: notes.trim() || undefined,
     };
     const clash = findClash(coaching, draft, day);
-    if (clash) {
+    const clashKey = clash ? `${clash.session.id}|${draft.coach}|${draft.itemId}` : null;
+    if (clash && !(clash.who === 'maybe-coach' && clashKey === bookAnyway)) {
       const what = bookingName(clash.session.kind).toLowerCase();
       const when = formatRange(coachingTimes(clash.session, day));
+      setBookAnyway(clash.who === 'maybe-coach' ? clashKey : null);
       return setError(
         clash.who === 'student'
           ? `${clash.session.studentEmail} already has a ${what} at ${when}. Pick another session.`
-          : `${draft.coach || draft.coachEmail} already has a ${what} with ${clash.session.studentEmail} at ${when}. Pick another session or instructor.`,
+          : clash.who === 'coach'
+            ? `${draft.coach || draft.coachEmail} already has a ${what} with ${clash.session.studentEmail} at ${when}. Pick another session or instructor.`
+            : `${clash.session.coach} already has a ${what} with ${clash.session.studentEmail} at ${when}. If ${draft.coach} is the same instructor, pick another session. If it's someone else, add their last name, or tap Save again to book anyway.`,
       );
     }
+    setBookAnyway(null);
     setBusy(true);
     const problem = await addCoaching(draft);
     setBusy(false);
