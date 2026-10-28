@@ -114,7 +114,7 @@ who paid for coaching and how many of their sessions are booked, with a Book
 button that fills in the form.
 
 **ClubReg sync.** Under Registered drivers, organizers can link the event to its ClubReg
-event number. The `ClubReg sync` GitHub Action (`.github/workflows/clubreg-sync.yml`,
+event number (each ClubReg event can be linked to only one event). The `ClubReg sync` GitHub Action (`.github/workflows/clubreg-sync.yml`,
 `scripts/clubreg-sync.ts`) then runs at 5:15 AM Eastern, and from two days before the event
 through its last day logs in to ClubReg, exports Report Builder's list for each linked event
 and sends it to `push-schedule` (`roster-due` / `roster-pull` actions). That replaces the
