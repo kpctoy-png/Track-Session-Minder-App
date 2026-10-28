@@ -49,6 +49,13 @@ or check ride (instructors are matched by email, or by name when no email was
 entered). A session is linked to a
 schedule item, so "running late" shifts move it too.
 
+Signed-in drivers can also ask for coaching from My Day (Request coaching). The card shows
+the club's price and how to pay (`COACHING_OFFER` in `src/lib/coaching.ts`) and that it's
+subject to availability. Requests (`coaching_requests`) alert and email the club's organizers
+through `push-schedule` (`coaching-request` action, from a trigger) and show at the top of
+Admin → Coaching. **Book** fills in the form and marks the request booked once saved;
+**Decline** (asks first) tells the driver by email and alert that coaching is full.
+
 Driver sign-in needs three settings in Supabase:
 
 1. Authentication → Sign In / Providers: turn on **Allow new users to sign up**.

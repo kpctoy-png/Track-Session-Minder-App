@@ -515,6 +515,50 @@ select cron.schedule('expire-rosters', '17 4 * * *', $cron$
   where (select max(d.date) from public.event_days d where d.event_id = r.event_id) < current_date - 7;
 $cron$);
 
+-- Drivers asking for a coaching session from My Day. The event's organizers get an alert and an email
+-- (push-schedule, from the trigger below) and book or decline it in Admin; a declined driver is told.
+create table if not exists coaching_requests (
+  id uuid primary key default gen_random_uuid(),
+  event_id text not null references events (id) on delete cascade,
+  email text not null check (email = lower(trim(email)) and length(email) <= 254),
+  note text check (length(note) <= 200),
+  status text not null default 'open' check (status in ('open', 'booked', 'declined')),
+  created_at timestamptz not null default now()
+);
+create index if not exists coaching_requests_event on coaching_requests (event_id, created_at);
+create unique index if not exists coaching_requests_one_open on coaching_requests (event_id, email) where status = 'open';
+alter table coaching_requests enable row level security;
+drop policy if exists "Drivers and organizers read requests" on coaching_requests;
+create policy "Drivers and organizers read requests" on coaching_requests for select to authenticated
+  using (email = lower(auth.jwt() ->> 'email') or can_announce(event_id));
+drop policy if exists "Drivers ask for coaching" on coaching_requests;
+create policy "Drivers ask for coaching" on coaching_requests for insert to authenticated
+  with check (email = lower(auth.jwt() ->> 'email') and status = 'open');
+drop policy if exists "Organizers answer requests" on coaching_requests;
+create policy "Organizers answer requests" on coaching_requests for update to authenticated
+  using (can_announce(event_id)) with check (can_announce(event_id));
+drop policy if exists "Drivers withdraw their request" on coaching_requests;
+create policy "Drivers withdraw their request" on coaching_requests for delete to authenticated
+  using (email = lower(auth.jwt() ->> 'email') or can_announce(event_id));
+
+create or replace function push_coaching_request() returns trigger
+  language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'UPDATE' and new.status is not distinct from old.status then return null; end if;
+  perform net.http_post(
+    url := 'https://trxqycpyhnzfyctajmsb.supabase.co/functions/v1/push-schedule',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-webhook-secret', (select secret from webhook_secrets where name = 'push-schedule')
+    ),
+    body := jsonb_build_object('action', 'coaching-request', 'type', tg_op, 'record', to_jsonb(new))
+  );
+  return null;
+end $$;
+drop trigger if exists coaching_request_push on coaching_requests;
+create trigger coaching_request_push after insert or update on coaching_requests
+  for each row execute function push_coaching_request();
+
 -- Automatic pulls of the roster from ClubReg (the "ClubReg sync" GitHub Action). Organizers link an event
 -- to its ClubReg event number; each pull is logged with who was added and who cancelled since the last one.
 create table if not exists roster_sync (
