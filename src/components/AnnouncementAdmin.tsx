@@ -49,7 +49,7 @@ export function AnnouncementAdmin({
   const [problem, setProblem] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<Recovery | null>(null);
   /** Registered drivers by run group: how many have an email, and their cell numbers. */
-  const [roster, setRoster] = useState<{ group: string; count: number; phones: string[] }[]>([]);
+  const [roster, setRoster] = useState<{ group: string; count: number; noPhone: number; phones: string[] }[]>([]);
   // How it goes out: nothing is ticked until the organizer picks at least one.
   const [emailToo, setEmailToo] = useState(false);
   const [textToo, setTextToo] = useState(false);
@@ -73,10 +73,11 @@ export function AnnouncementAdmin({
       .select('run_group, email, phone')
       .eq('event_id', event.id)
       .then(({ data }) => {
-        const byGroup = new Map<string, { count: number; phones: string[] }>();
+        const byGroup = new Map<string, { count: number; noPhone: number; phones: string[] }>();
         for (const r of data ?? []) {
-          const g = byGroup.get(r.run_group ?? '') ?? { count: 0, phones: [] };
+          const g = byGroup.get(r.run_group ?? '') ?? { count: 0, noPhone: 0, phones: [] };
           if (r.email) g.count++;
+          if (r.email && !r.phone) g.noPhone++;
           if (r.phone && !g.phones.includes(r.phone)) g.phones.push(r.phone);
           byGroup.set(r.run_group ?? '', g);
         }
@@ -89,15 +90,22 @@ export function AnnouncementAdmin({
   const registered = roster.reduce((n, g) => n + g.count, 0);
   const named = roster.filter((g) => g.group);
   const emailCount = groups ? roster.filter((g) => groups.includes(g.group)).reduce((n, g) => n + g.count, 0) : registered;
-  const emailing = !everyone && emailToo && emailCount > 0;
   const chosen = groups ? roster.filter((g) => groups.includes(g.group)) : roster;
   const phones = [...new Set(chosen.flatMap((g) => g.phones))];
   const allPhones = roster.reduce((n, g) => n + g.phones.length, 0);
   const texting = !everyone && textToo && phones.length > 0;
+  // Texts come first; drivers with no cell number get an email instead, unless everyone is being emailed anyway.
+  const noPhone = chosen.reduce((n, g) => n + g.noPhone, 0);
+  const emailRest = texting && !emailToo && noPhone > 0;
+  const emailing = !everyone && ((emailToo && emailCount > 0) || emailRest);
   const reaching = emailing || texting;
   const showing = inApp || everyone;
   const audience = everyone ? 'every driver, on every event' : `every driver following ${event.name}`;
-  const emailWho = groups ? `${emailCount} registered ${groups.join(' / ')} drivers` : `${registered} registered drivers`;
+  const emailWho = emailRest
+    ? `${noPhone === 1 ? '1 driver' : `${noPhone} drivers`} with no cell number`
+    : groups
+      ? `${emailCount} registered ${groups.join(' / ')} drivers`
+      : `${registered} registered drivers`;
 
   const toggleGroup = (group: string) => {
     const next = groups?.includes(group) ? groups.filter((g) => g !== group) : [...(groups ?? []), group];
@@ -131,7 +139,7 @@ export function AnnouncementAdmin({
     if (!emailing) return onSent(showing ? 'Announcement sent to drivers' : 'Ready to text');
     const sent = showing ? 'Announcement sent to drivers · ' : '';
     onSent(`${sent}emailing…`);
-    const mail = await emailRoster(event.id, announcementText(text), groups ?? undefined);
+    const mail = await emailRoster(event.id, announcementText(text), groups ?? undefined, emailRest);
     if (mail.error) setProblem(`${showing ? 'Shown in the app, but the' : 'The'} email didn't go out: ${mail.error}`);
     else onSent(`${sent}emailed ${mail.emailed}`);
   };
@@ -256,10 +264,11 @@ export function AnnouncementAdmin({
               }}
             />
           ) : null}
+          {emailRest ? <Text style={styles.checkNote}>{noPhone === 1 ? 'The 1 driver with no cell number gets an email instead.' : `The ${noPhone} drivers with no cell number get an email instead.`}</Text> : null}
           {registered > 0 ? (
             <Check
               checked={emailToo}
-              label={`Email the ${registered === 1 ? '1 registered driver' : `${registered} registered drivers`}`}
+              label={`Email ${registered === 1 ? 'the 1 registered driver' : `all ${registered} registered drivers`}${textToo && allPhones > 0 ? ', even those who get a text' : ''}`}
               onPress={() => {
                 setEmailToo(!emailToo);
                 setConfirming(false);
@@ -317,7 +326,7 @@ export function AnnouncementAdmin({
   );
 
   function confirmText() {
-    const extras = [emailing ? `email the ${emailWho}` : '', texting ? `text ${plural(phones.length)} from your iPhone` : ''].filter(Boolean);
+    const extras = [texting ? `text ${plural(phones.length)} from your iPhone` : '', emailing ? `email the ${emailWho}` : ''].filter(Boolean);
     const also = extras.length ? `, and ${extras.join(' and ')}` : '';
     if (showing) return `Show this to ${audience}, alert their phones${also}?`;
     return `${extras.join(' and ').replace(/^./, (c) => c.toUpperCase())}? It won't show in the app.`;
@@ -447,6 +456,7 @@ const styles = StyleSheet.create({
   check: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
   checkBox: { color: colors.accent, fontSize: 22 },
   checkText: { color: colors.text, fontSize: 15 },
+  checkNote: { color: colors.muted, fontSize: 13, marginLeft: 28, marginTop: -2, marginBottom: 6 },
   minutes: { color: colors.text, fontSize: 16, fontWeight: '700', minWidth: 60, textAlign: 'center' },
   change: { color: colors.text, fontSize: 14, lineHeight: 20 },
   confirm: { borderWidth: 2, borderColor: colors.accent, borderRadius: 12, padding: 12, marginTop: 10, marginBottom: 10, gap: 10 },

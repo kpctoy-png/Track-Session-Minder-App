@@ -4,7 +4,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { BookingKind } from '@/data/types';
 import { bookingName, COACHING_OFFER, coachingTimes, findClash, isEmail } from '@/lib/coaching';
 import { runGroupFor } from '@/lib/roster';
-import { formatRange, formatTime, sortItems } from '@/lib/schedule';
+import { todayISO } from '@/lib/dates';
+import { formatRange, formatTime, sortItems, toMinutes } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { supabase } from '@/lib/supabase';
 import { GrammarCheck } from './GrammarCheck';
@@ -36,6 +37,7 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   const [forGroup, setForGroup] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [kind, setKind] = useState<BookingKind>('coaching');
+  const [showFinished, setShowFinished] = useState(false);
   const [email, setEmail] = useState('');
   const [coach, setCoach] = useState('');
   const [coachEmail, setCoachEmail] = useState('');
@@ -111,10 +113,16 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
     setAdding(true);
   };
 
-  const booked = coaching
+  const all = coaching
     .filter((c) => c.dayId === day.id)
     .map((c) => ({ session: c, ...coachingTimes(c, day) }))
     .sort((a, b) => a.start.localeCompare(b.start));
+  // Sessions that have ended fold away under "Finished", so the list shows what's still to come.
+  const now = new Date();
+  const today = todayISO(now);
+  const isOver = (end: string) => day.date < today || (day.date === today && toMinutes(end) <= now.getHours() * 60 + now.getMinutes());
+  const booked = all.filter((b) => !isOver(b.end));
+  const finished = all.filter((b) => isOver(b.end));
   const items = sortItems(day.items);
 
   const save = async () => {
@@ -398,6 +406,29 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
         </View>
       ))}
 
+      {finished.length ? (
+        <>
+          <Pressable onPress={() => setShowFinished(!showFinished)} style={styles.finishedToggle} accessibilityRole="button">
+            <Text style={styles.finishedToggleText}>
+              {showFinished ? '▾' : '▸'} Finished ({finished.length})
+            </Text>
+          </Pressable>
+          {showFinished
+            ? finished.map(({ session, start, end }) => (
+                <View key={session.id} style={[styles.row, styles.finishedRow]}>
+                  <View style={styles.rowBody}>
+                    <Text style={styles.rowTime}>{formatRange({ start, end })}</Text>
+                    <Text style={styles.rowTitle}>{session.studentEmail}</Text>
+                    <Text style={styles.rowSub}>
+                      {bookingName(session.kind)} · {session.coach ? `Instructor: ${session.coach}` : 'No instructor named'}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            : null}
+        </>
+      ) : null}
+
       {adding && !bookingFrom ? (
         form
       ) : adding ? null : (
@@ -422,6 +453,9 @@ const styles = StyleSheet.create({
   heading: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 24 },
   sub: { color: colors.muted, fontSize: 13, marginTop: 2, marginBottom: 10 },
   label: { color: colors.text, fontWeight: '700', marginBottom: 8 },
+  finishedToggle: { paddingVertical: 8 },
+  finishedToggleText: { color: colors.muted, fontSize: 14, fontWeight: '600' },
+  finishedRow: { opacity: 0.55, borderLeftColor: colors.border },
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 12, marginBottom: 6, borderLeftWidth: 6, borderLeftColor: colors.accent },
   rowBody: { flex: 1, padding: 12 },
   rowTime: { color: colors.muted, fontSize: 13, fontVariant: ['tabular-nums'] },
