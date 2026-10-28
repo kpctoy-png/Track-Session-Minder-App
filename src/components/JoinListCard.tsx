@@ -17,16 +17,36 @@ async function answeredClubs(): Promise<string[]> {
   }
 }
 
+// Clubs this phone has joined, so My Day can say so instead of asking again.
+const JOINED_KEY = 'tsm-list-joined';
+
+async function joinedClubs(): Promise<string[]> {
+  try {
+    return JSON.parse((await AsyncStorage.getItem(JOINED_KEY)) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+
+async function markJoined(clubId: string) {
+  const clubs = await joinedClubs();
+  await AsyncStorage.setItem(JOINED_KEY, JSON.stringify([...new Set([...clubs, clubId])])).catch(() => {});
+}
+
 async function markAnswered(clubId: string) {
   const clubs = await answeredClubs();
   await AsyncStorage.setItem(ANSWERED_KEY, JSON.stringify([...new Set([...clubs, clubId])])).catch(() => {});
 }
 
-/** Optional: a driver leaves their name and email so the event's club can email them. */
-export function JoinListCard() {
+/**
+ * Optional: a driver leaves their name and email so the event's club can email them. On Now it asks once per club;
+ * on My Day (`always`) it stays available even after No thanks, until they join.
+ */
+export function JoinListCard({ always = false }: { always?: boolean }) {
   const { clubs, event, session } = useSchedule();
   const club = clubs.find((c) => c.id === event.clubId);
   const [answered, setAnswered] = useState<string[] | null>(null);
+  const [joinedBefore, setJoinedBefore] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [agreed, setAgreed] = useState(false);
@@ -36,6 +56,7 @@ export function JoinListCard() {
 
   useEffect(() => {
     answeredClubs().then(setAnswered);
+    joinedClubs().then(setJoinedBefore);
   }, []);
 
   useEffect(() => {
@@ -43,14 +64,14 @@ export function JoinListCard() {
   }, [session]);
 
   if (!supabase || !club || !event.id || !answered) return null;
-  if (joined) {
+  if (joined || (always && joinedBefore.includes(club.id))) {
     return (
       <View style={styles.card}>
         <Text style={styles.text}>✓ You're on the {club.name} list. Thanks!</Text>
       </View>
     );
   }
-  if (answered.includes(club.id)) return null;
+  if (answered.includes(club.id) && !always) return null;
 
   const join = async () => {
     const cleanEmail = email.trim().toLowerCase();
@@ -67,6 +88,7 @@ export function JoinListCard() {
     setBusy(false);
     if (error) return setProblem(`Couldn't sign you up: ${error.message}`);
     await markAnswered(club.id);
+    await markJoined(club.id);
     setJoined(true);
   };
 
@@ -111,9 +133,11 @@ export function JoinListCard() {
         <Pressable onPress={join} disabled={busy} style={[styles.btn, styles.grow]}>
           <Text style={styles.btnText}>{busy ? 'Joining…' : 'Join the list'}</Text>
         </Pressable>
-        <Pressable onPress={noThanks} disabled={busy}>
-          <Text style={styles.link}>No thanks</Text>
-        </Pressable>
+        {always ? null : (
+          <Pressable onPress={noThanks} disabled={busy}>
+            <Text style={styles.link}>No thanks</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );

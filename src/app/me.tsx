@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { DriverScroll } from '@/components/AnnouncementBanner';
 import { AlertsCard } from '@/components/AlertsCard';
+import { JoinListCard } from '@/components/JoinListCard';
 import { CoachingRequestCard } from '@/components/CoachingRequestCard';
 import { DriverGuide } from '@/components/DriverGuide';
 import { EmailCodeSignIn } from '@/components/EmailCodeSignIn';
@@ -45,6 +46,7 @@ export default function MeScreen() {
       <Pressable onPress={() => router.navigate('/privacy')}>
         <Text style={styles.privacy}>Privacy: what we collect and why</Text>
       </Pressable>
+      <JoinListCard always />
     </>
   );
   if (supabase && !myEmail)
