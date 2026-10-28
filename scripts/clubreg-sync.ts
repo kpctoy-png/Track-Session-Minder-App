@@ -20,8 +20,10 @@ const FUNCTION = `${env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/push-schedule`;
 const KEY = env.EXPO_PUBLIC_SUPABASE_KEY;
 const CLUBREG = process.env.CLUBREG_URL ?? 'https://www.clubregistration.net';
 const { CLUBREG_EMAIL, CLUBREG_PASSWORD, ROSTER_SYNC_TOKEN, MANUAL, ALL } = process.env;
+/** The club whose ClubReg login the robot has: its events not linked yet are matched to ClubReg by date. */
+const CLUB = process.env.CLUBREG_CLUB || 'just-track-it';
 
-type Due = { eventId: string; clubregEventId: string; name: string };
+type Due = { eventId: string; clubregEventId: string | null; name: string; first: string; last: string };
 
 async function call(body: Record<string, unknown>) {
   const res = await fetch(FUNCTION, {
@@ -41,7 +43,7 @@ function inPullHour(): boolean {
 }
 
 async function due(): Promise<Due[]> {
-  return (await call({ action: 'roster-due', all: ALL === 'true' })).due;
+  return (await call({ action: 'roster-due', all: ALL === 'true', club: CLUB })).due;
 }
 
 /** What's on the page, for the log when a step fails: field names, checkbox labels and buttons, never values. */
@@ -185,10 +187,13 @@ async function exportList(page: import('playwright').Page, clubregEventId: strin
   });
 }
 
-/** The club's events as ClubReg lists them to a signed-in organizer: number, and the text of the row it's in (no driver data). */
+/**
+ * The club's events as ClubReg lists them to a signed-in organizer (Admin: Current Events), as the number and the
+ * text of its row, such as "Driver's Ed (10/30/26)". No driver data.
+ */
 async function clubEvents(page: import('playwright').Page): Promise<{ id: string; text: string }[]> {
   const found = new Map<string, string>();
-  for (const path of ['/club_admin/', '/club_admin/event_management/', '/club_admin/event_management/index.cfm']) {
+  for (const path of ['/club_admin/event_select.cfm', '/club_admin/']) {
     await page.goto(signedIn(path), { waitUntil: 'networkidle' }).catch(() => {});
     console.log(`Looked at ${new URL(page.url()).pathname} "${await page.title()}"`);
     const rows = await page.locator('a[href*="event_id=" i], a[href*="/event/" i]').evaluateAll((links) =>
@@ -202,6 +207,43 @@ async function clubEvents(page: import('playwright').Page): Promise<{ id: string
     for (const r of rows) if (r.id && !found.has(r.id)) found.set(r.id, r.text);
   }
   return [...found].map(([id, text]) => ({ id, text }));
+}
+
+/** The ClubReg event starting within three days before an event's first day (ClubReg may date it from arrival day). */
+function matchByDate(event: { first: string; last: string }, clubreg: { id: string; text: string }[]): string | null {
+  const from = new Date(`${event.first}T12:00:00Z`);
+  from.setUTCDate(from.getUTCDate() - 3);
+  const hits = clubreg.filter((c) => {
+    if (/membership/i.test(c.text)) return false;
+    const m = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(c.text);
+    if (!m) return false;
+    const year = m[3].length === 2 ? `20${m[3]}` : m[3];
+    const date = `${year}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+    return date >= from.toISOString().slice(0, 10) && date <= event.last;
+  });
+  return hits.length === 1 ? hits[0].id : null;
+}
+
+/** Finds and links the ClubReg number of each due event that isn't linked yet; returns the ones it could link. */
+async function linkByDate(page: import('playwright').Page, unlinked: Due[]): Promise<Due[]> {
+  if (!unlinked.length) return [];
+  const clubreg = await clubEvents(page);
+  const linked: Due[] = [];
+  for (const event of unlinked) {
+    const id = matchByDate(event, clubreg);
+    if (!id) {
+      console.log(`${event.name}: no single ClubReg event starting ${event.first} or up to 3 days before, so not linked (type its number in Admin).`);
+      continue;
+    }
+    try {
+      await call({ action: 'roster-link', eventId: event.eventId, clubregEventId: id });
+      console.log(`${event.name}: linked to ClubReg event ${id} (found by date)`);
+      linked.push({ ...event, clubregEventId: id });
+    } catch (err) {
+      console.log(`${event.name}: ClubReg event ${id} not linked (${(err as Error).message})`);
+    }
+  }
+  return linked;
 }
 
 async function main() {
@@ -237,9 +279,10 @@ async function main() {
   try {
     const page = await (await browser.newContext({ acceptDownloads: true })).newPage();
     await login(page);
-    for (const event of list) {
+    const pulls = [...list.filter((e) => e.clubregEventId), ...(await linkByDate(page, list.filter((e) => !e.clubregEventId)))];
+    for (const event of pulls) {
       try {
-        const { rows, problem } = rosterFromCsv(await exportList(page, event.clubregEventId));
+        const { rows, problem } = rosterFromCsv(await exportList(page, event.clubregEventId!));
         if (problem) throw new Error(problem);
         const result = await call({ action: 'roster-pull', eventId: event.eventId, rows });
         console.log(`${event.name}: ${result.kept ? 'ClubReg gave no drivers, list kept' : `${result.total} drivers, ${result.added} new, ${result.removed} cancelled`}`);
@@ -251,8 +294,8 @@ async function main() {
       }
     }
   } catch (err) {
-    // Login failed: note it on every due event so organizers see it in Admin.
-    for (const event of list)
+    // Login failed: note it on every linked due event so organizers see it in Admin.
+    for (const event of list.filter((e) => e.clubregEventId))
       await call({ action: 'roster-pull', eventId: event.eventId, problem: `Pull failed, list kept: ${(err as Error).message.split('\n')[0]}` }).catch(() => {});
     throw err;
   } finally {
