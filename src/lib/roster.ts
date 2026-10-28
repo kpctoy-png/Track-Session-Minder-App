@@ -100,13 +100,19 @@ export function rosterFromTable(table: string[][]): { rows: RosterRow[]; problem
   const full = col(/^(full )?name$|^driver( name)?$|^participant( name)?$/);
   const status = col(/^status$/);
   const runGroup = col(/^run ?group$/);
-  const phone = col(/^(cell|mobile|phone|cell ?phone|mobile ?phone|phone ?number)$/);
+  const body = table.slice(headerAt + 1);
+  const named = col(/^(cell|mobile|phone|cell ?phone|mobile ?phone|phone ?number)$/);
+  // Google Sheets blanks the heading of a column of numbers, so also look for a column that holds phone numbers.
+  const phone =
+    named >= 0
+      ? named
+      : header.findIndex((_, i) => i !== email && body.filter((r) => phoneNumber(r[i])).length * 2 >= body.filter((r) => (r[i] ?? '').trim()).length && body.some((r) => phoneNumber(r[i])));
   const coaching = col(/coaching.*(quantity|qty)/);
   const waitList = col(/coaching.*wait/);
 
   const seen = new Set<string>();
   const rows: RosterRow[] = [];
-  for (const r of table.slice(headerAt + 1)) {
+  for (const r of body) {
     if (status >= 0 && /cancel/i.test(r[status] ?? '')) continue;
     const address = (r[email] ?? '').trim().toLowerCase();
     if (!EMAIL.test(address) || seen.has(address)) continue;
