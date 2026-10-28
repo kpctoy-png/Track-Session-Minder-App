@@ -48,8 +48,12 @@ export function AnnouncementAdmin({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<Recovery | null>(null);
-  const [roster, setRoster] = useState<{ group: string; count: number }[]>([]);
+  /** Registered drivers by run group: how many have an email, and their cell numbers. */
+  const [roster, setRoster] = useState<{ group: string; count: number; phones: string[] }[]>([]);
   const [emailToo, setEmailToo] = useState(true);
+  const [textToo, setTextToo] = useState(true);
+  /** Texts waiting for the organizer to send from their iPhone with the Text Drivers shortcut. */
+  const [textBatch, setTextBatch] = useState<{ message: string; phones: string[] } | null>(null);
   /** Run groups to email; null emails everyone registered. */
   const [groups, setGroups] = useState<string[] | null>(null);
   const [inApp, setInApp] = useState(true);
@@ -63,13 +67,22 @@ export function AnnouncementAdmin({
     setInApp(true);
     supabase
       ?.from('event_roster')
-      .select('run_group')
+      .select('run_group, email, phone')
       .eq('event_id', event.id)
-      .not('email', 'is', null)
       .then(({ data }) => {
-        const counts = new Map<string, number>();
-        for (const r of data ?? []) counts.set(r.run_group ?? '', (counts.get(r.run_group ?? '') ?? 0) + 1);
-        setRoster([...counts].map(([group, count]) => ({ group, count })).sort((a, b) => a.group.localeCompare(b.group)));
+        const byGroup = new Map<string, { count: number; phones: string[] }>();
+        for (const r of data ?? []) {
+          const g = byGroup.get(r.run_group ?? '') ?? { count: 0, phones: [] };
+          if (r.email) g.count++;
+          if (r.phone && !g.phones.includes(r.phone)) g.phones.push(r.phone);
+          byGroup.set(r.run_group ?? '', g);
+        }
+        const next = [...byGroup].map(([group, g]) => ({ group, ...g })).sort((a, b) => a.group.localeCompare(b.group));
+        setRoster(next);
+        // Drivers would rather get a text than an email, so texting is the default once there are numbers.
+        const hasPhones = next.some((g) => g.phones.length);
+        setTextToo(hasPhones);
+        setEmailToo(!hasPhones);
       });
   }, [event.id, rosterVersion]);
 
@@ -78,8 +91,13 @@ export function AnnouncementAdmin({
   const named = roster.filter((g) => g.group);
   const emailCount = groups ? roster.filter((g) => groups.includes(g.group)).reduce((n, g) => n + g.count, 0) : registered;
   const emailing = !everyone && emailToo && emailCount > 0;
-  // The app and phone alerts can be skipped only when the message is going out by email instead.
-  const showing = inApp || !emailing;
+  const chosen = groups ? roster.filter((g) => groups.includes(g.group)) : roster;
+  const phones = [...new Set(chosen.flatMap((g) => g.phones))];
+  const allPhones = roster.reduce((n, g) => n + g.phones.length, 0);
+  const texting = !everyone && textToo && phones.length > 0;
+  const reaching = emailing || texting;
+  // The app and phone alerts can be skipped only when the message is going out by email or text instead.
+  const showing = inApp || !reaching;
   const audience = everyone ? 'every driver, on every event' : `every driver following ${event.name}`;
   const emailWho = groups ? `${emailCount} registered ${groups.join(' / ')} drivers` : `${registered} registered drivers`;
 
@@ -107,7 +125,8 @@ export function AnnouncementAdmin({
     setBusy(false);
     setConfirming(false);
     setMessage('');
-    if (!emailing) return onSent('Announcement sent to drivers');
+    if (texting) setTextBatch({ message: `${event.name}: ${announcementText(text)}`, phones });
+    if (!emailing) return onSent(showing ? 'Announcement sent to drivers' : 'Ready to text');
     const sent = showing ? 'Announcement sent to drivers · ' : '';
     onSent(`${sent}emailing…`);
     const mail = await emailRoster(event.id, announcementText(text), groups ?? undefined);
@@ -214,6 +233,20 @@ export function AnnouncementAdmin({
           </View>
         </>
       ) : null}
+      {!everyone && allPhones > 0 ? (
+        <Pressable
+          onPress={() => {
+            setTextToo(!textToo);
+            setConfirming(false);
+          }}
+          style={styles.check}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: textToo }}
+        >
+          <Text style={styles.checkBox}>{textToo ? '☑' : '☐'}</Text>
+          <Text style={styles.checkText}>Also text the {allPhones} drivers with a cell number (from your iPhone)</Text>
+        </Pressable>
+      ) : null}
       {!everyone && registered > 0 ? (
         <Pressable
           onPress={() => {
@@ -228,11 +261,11 @@ export function AnnouncementAdmin({
           <Text style={styles.checkText}>Also email the {registered} registered drivers</Text>
         </Pressable>
       ) : null}
-      {emailing ? (
+      {reaching ? (
         <>
           {named.length > 0 && roster.length > 1 ? (
             <>
-              <Text style={styles.label}>Email which run groups</Text>
+              <Text style={styles.label}>{texting && !emailing ? 'Text which run groups' : emailing && !texting ? 'Email which run groups' : 'Which run groups'}</Text>
               <View style={styles.buttons}>
                 <Btn
                   label={`All (${registered})`}
@@ -266,13 +299,11 @@ export function AnnouncementAdmin({
       {confirming ? (
         <View style={styles.confirm}>
           <Text style={styles.confirmText}>
-            {showing
-              ? `Show this to ${audience}${emailing ? `, alert their phones, and email the ${emailWho}?` : ', and alert their phones?'}`
-              : `Email this only to the ${emailWho}? It won't show in the app.`}
+            {confirmText()}
             {'\n\n'}“{announcementText(message.trim())}”
           </Text>
           <View style={styles.buttons}>
-            <Btn label={busy ? 'Sending…' : showing ? 'Send to drivers' : 'Send email'} onPress={() => !busy && send()} primary />
+            <Btn label={busy ? 'Sending…' : showing ? 'Send to drivers' : emailing ? 'Send email' : 'Get texts ready'} onPress={() => !busy && send()} primary />
             <Btn label="Cancel" onPress={() => setConfirming(false)} />
           </View>
         </View>
@@ -285,7 +316,50 @@ export function AnnouncementAdmin({
           />
         </View>
       )}
+      {textBatch ? <TextDrivers batch={textBatch} onDone={() => setTextBatch(null)} /> : null}
       {problem ? <Text style={styles.problem}>{problem}</Text> : null}
+    </View>
+  );
+
+  function confirmText() {
+    const extras = [emailing ? `email the ${emailWho}` : '', texting ? `text ${plural(phones.length)} from your iPhone` : ''].filter(Boolean);
+    const also = extras.length ? `, and ${extras.join(' and ')}` : '';
+    if (showing) return `Show this to ${audience}, alert their phones${also}?`;
+    return `${extras.join(' and ').replace(/^./, (c) => c.toUpperCase())}? It won't show in the app.`;
+  }
+}
+
+const plural = (n: number) => `${n} ${n === 1 ? 'driver' : 'drivers'}`;
+
+/** The name the organizer gives the shortcut on their iPhone; the button below runs it by this name. */
+export const TEXT_SHORTCUT = 'Text Drivers';
+
+/**
+ * Hands the message and numbers to the Text Drivers shortcut on the organizer's iPhone, which sends each driver
+ * their own text from the organizer's number. Web pages can't send texts themselves.
+ */
+function TextDrivers({ batch, onDone }: { batch: { message: string; phones: string[] }; onDone: () => void }) {
+  const [opened, setOpened] = useState(false);
+  const url = `shortcuts://run-shortcut?name=${encodeURIComponent(TEXT_SHORTCUT)}&input=text&text=${encodeURIComponent(JSON.stringify(batch))}`;
+  return (
+    <View style={styles.confirm}>
+      <Text style={styles.confirmText}>
+        {opened
+          ? `The ${TEXT_SHORTCUT} shortcut is texting ${plural(batch.phones.length)}. Keep the Shortcuts app open until it finishes.`
+          : `Now text ${plural(batch.phones.length)} from your iPhone:`}
+        {'\n\n'}“{batch.message}”
+      </Text>
+      <View style={styles.buttons}>
+        <Btn
+          label={opened ? 'Send the texts again' : `Text ${plural(batch.phones.length)}`}
+          primary={!opened}
+          onPress={() => {
+            setOpened(true);
+            if (typeof window !== 'undefined') window.location.href = url;
+          }}
+        />
+        <Btn label={opened ? 'Done' : 'Skip texts'} onPress={onDone} />
+      </View>
     </View>
   );
 }

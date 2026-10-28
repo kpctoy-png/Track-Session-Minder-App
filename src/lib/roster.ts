@@ -10,6 +10,19 @@ export interface RosterRow {
   runGroup?: string;
   /** Coaching sessions paid for (ClubReg's "Advanced Coaching Quantity"). */
   coaching?: number;
+  /** Cell number for texting, as +1XXXXXXXXXX when it is a US number. */
+  phone?: string;
+}
+
+/** "(912) 555-0100", "912.555.0100" or "+1 912 555 0100" -> "+19125550100"; anything that isn't a phone number -> undefined. */
+export function phoneNumber(cell: string | undefined): string | undefined {
+  const raw = (cell ?? '').trim();
+  if (!raw || /[a-z@]/i.test(raw.replace(/\b(ext|x)\.?\s*\d+$/i, ''))) return undefined;
+  const digits = raw.replace(/\b(ext|x)\.?\s*\d+$/i, '').replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (raw.startsWith('+') && digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+  return undefined;
 }
 
 /** Splits CSV text into rows of cells, handling quoted cells with commas, quotes and line breaks. */
@@ -85,6 +98,7 @@ export function rosterFromTable(table: string[][]): { rows: RosterRow[]; problem
   const full = col(/^(full )?name$|^driver( name)?$|^participant( name)?$/);
   const status = col(/^status$/);
   const runGroup = col(/^run ?group$/);
+  const phone = col(/^(cell|mobile|phone|cell ?phone|mobile ?phone|phone ?number)$/);
   const coaching = col(/coaching.*(quantity|qty)/);
   const waitList = col(/coaching.*wait/);
 
@@ -102,6 +116,7 @@ export function rosterFromTable(table: string[][]): { rows: RosterRow[]; problem
       email: address.slice(0, 254),
       runGroup: runGroup >= 0 ? (r[runGroup] ?? '').trim().slice(0, 60) || undefined : undefined,
       coaching: Math.min(20, Math.max(0, paid || 0)),
+      phone: phone >= 0 ? phoneNumber(r[phone]) : undefined,
     });
   }
   if (!rows.length) return { rows, problem: 'The Email column has no email addresses in it.' };
@@ -116,6 +131,7 @@ function headerless(table: string[][]): { rows: RosterRow[]; problem?: string } 
   const listed = table.filter((r) => EMAIL.test((r[email] ?? '').trim()));
   const width = Math.max(0, ...listed.map((r) => r.length));
   const columns = Array.from({ length: width }, (_, i) => i).filter((i) => i !== email);
+  const phoneAt = columns.find((i) => listed.some((r) => phoneNumber(r[i])));
   const short = (c: string | undefined) => !!c && /[a-z]/i.test(c) && !c.includes('@') && c.trim().length <= 30;
   const group =
     columns.find((i) => i > email && listed.some((r) => short(r[i]))) ??
@@ -126,9 +142,10 @@ function headerless(table: string[][]): { rows: RosterRow[]; problem?: string } 
     const address = (r[email] ?? '').trim().toLowerCase();
     if (!EMAIL.test(address) || seen.has(address)) continue;
     seen.add(address);
-    const name = r.filter((c, i) => i !== email && i !== group && /[a-z]/i.test(c)).join(' ');
+    const name = r.filter((c, i) => i !== email && i !== group && i !== phoneAt && /[a-z]/i.test(c)).join(' ');
     const runGroup = group !== undefined ? (r[group] ?? '').trim().slice(0, 60) || undefined : undefined;
-    rows.push({ name: name.trim().replace(/\s+/g, ' ').slice(0, 200), email: address.slice(0, 254), runGroup, coaching: 0 });
+    const phone = phoneAt !== undefined ? phoneNumber(r[phoneAt]) : undefined;
+    rows.push({ name: name.trim().replace(/\s+/g, ' ').slice(0, 200), email: address.slice(0, 254), runGroup, coaching: 0, phone });
   }
   return { rows };
 }

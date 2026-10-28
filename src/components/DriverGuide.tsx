@@ -46,7 +46,7 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
         <Body>
           If the organizers need everyone to know something right away (lightning, a red flag, a track closure), a red
           message stays pinned at the top of every tab, even while you scroll. The icon in front tells you what it's about at a glance (⚡ lightning,
-          🚑 medical, 🚩 red flag, 🌧️ weather, 🛢️ Speedy Dry, 🔥 fire, ⚠️ caution, 🏁 track open). Phones with alerts on get it as an alert too, and the organizers may also email it to everyone registered for the
+          🚑 medical, 🚩 red flag, 🌧️ weather, 🛢️ Speedy Dry, 🔥 fire, ⚠️ caution, 🏁 track open). Phones with alerts on get it as an alert too, and the organizers may also text or email it to everyone registered for the
           event. It goes away when the
           organizers clear it, and any schedule change that follows shows up as usual.
         </Body>

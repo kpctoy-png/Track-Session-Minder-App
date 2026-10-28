@@ -127,7 +127,7 @@ async function login(page: import('playwright').Page) {
  * export. Each extra option (Advanced Coaching among them) has its own Quantity and Wait List boxes, labelled
  * only that way, so all of them are ticked and the reader keeps the coaching ones by their column heading.
  */
-const COLUMNS = [/^e-?mail/i, /^first ?name/i, /^last ?name/i, /^name$/i, /^run ?group/i, /coaching/i, /^quantity$/i, /^wait ?list$/i];
+const COLUMNS = [/^e-?mail/i, /^phone$/i, /^first ?name/i, /^last ?name/i, /^name$/i, /^run ?group/i, /coaching/i, /^quantity$/i, /^wait ?list$/i];
 /** Registration statuses to include: people who are coming, not those cancelled or on the wait list. */
 const STATUSES: Record<string, boolean> = { confirmed: true, pending: true, 'wait listed': false, cancelled: false };
 
@@ -285,7 +285,7 @@ async function main() {
         const { rows, problem } = rosterFromCsv(await exportList(page, event.clubregEventId!));
         if (problem) throw new Error(problem);
         const result = await call({ action: 'roster-pull', eventId: event.eventId, rows });
-        console.log(`${event.name}: ${result.kept ? 'ClubReg gave no drivers, list kept' : `${result.total} drivers, ${result.added} new, ${result.removed} cancelled`}`);
+        console.log(`${event.name}: ${result.kept ? 'ClubReg gave no drivers, list kept' : `${result.total} drivers (${rows.filter((r) => r.phone).length} with a cell number), ${result.added} new, ${result.removed} cancelled`}`);
       } catch (err) {
         failed++;
         const message = (err as Error).message;

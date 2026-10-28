@@ -24,9 +24,9 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const { data, error } = await supabase.from('event_roster').select('name, email, run_group, coaching').eq('event_id', eventId).order('name');
+    const { data, error } = await supabase.from('event_roster').select('name, email, run_group, coaching, phone').eq('event_id', eventId).order('name');
     if (error) setError(error.message);
-    else setRows(data.map((r) => ({ name: r.name, email: r.email ?? '', runGroup: r.run_group ?? undefined, coaching: r.coaching ?? 0 })));
+    else setRows(data.map((r) => ({ name: r.name, email: r.email ?? '', runGroup: r.run_group ?? undefined, coaching: r.coaching ?? 0, phone: r.phone ?? undefined })));
   }, [eventId]);
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
     const del = await supabase.from('event_roster').delete().eq('event_id', eventId);
     const ins = del.error
       ? del
-      : await supabase.from('event_roster').insert(upload.rows.map((r) => ({ event_id: eventId, name: r.name, email: r.email, run_group: r.runGroup ?? null, coaching: r.coaching ?? 0 })));
+      : await supabase.from('event_roster').insert(upload.rows.map((r) => ({ event_id: eventId, name: r.name, email: r.email, run_group: r.runGroup ?? null, coaching: r.coaching ?? 0, phone: r.phone ?? null })));
     setBusy(false);
     if (ins.error) return setError(`Not saved: ${ins.error.message}`);
     setUpload(null);
@@ -160,7 +160,7 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
         <>
           <View style={styles.summaryRow}>
             <Text style={styles.summary}>
-              {rows.length} registered {rows.length === 1 ? 'driver' : 'drivers'}
+              {rows.length} registered {rows.length === 1 ? 'driver' : 'drivers'} · {rows.filter((r) => r.phone).length} with a cell number
             </Text>
             {removing ? (
               <Pressable onPress={removeAll}>
@@ -321,8 +321,10 @@ const paidFor = (rows: RosterRow[]) => rows.filter((r) => r.coaching).length;
 function groupsIn(rows: RosterRow[]): string {
   const counts = new Map<string, number>();
   for (const r of rows) if (r.runGroup) counts.set(r.runGroup, (counts.get(r.runGroup) ?? 0) + 1);
-  if (!counts.size) return ' No run groups found.';
-  return ` Run groups: ${[...counts].sort().map(([g, n]) => `${g} ${n}`).join(', ')}.`;
+  const phones = rows.filter((r) => r.phone).length;
+  const cells = ` ${phones} with a cell number.`;
+  if (!counts.size) return ` No run groups found.${cells}`;
+  return ` Run groups: ${[...counts].sort().map(([g, n]) => `${g} ${n}`).join(', ')}.${cells}`;
 }
 
 const styles = StyleSheet.create({
