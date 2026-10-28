@@ -182,6 +182,9 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
               style={styles.input}
               placeholder="Instructor's name"
               placeholderTextColor={colors.muted}
+              spellCheck
+              autoCorrect
+              autoCapitalize="words"
               value={coach}
               onChangeText={setCoach}
             />
@@ -212,6 +215,9 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
               style={styles.input}
               placeholder="Notes for the student (optional), like where to meet"
               placeholderTextColor={colors.muted}
+              spellCheck
+              autoCorrect
+              autoCapitalize="sentences"
               value={notes}
               onChangeText={setNotes}
             />

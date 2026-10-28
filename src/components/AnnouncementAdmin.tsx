@@ -178,6 +178,9 @@ export function AnnouncementAdmin({
         placeholder="e.g. Lightning in the area. Track closed, stay in your cars."
         placeholderTextColor={colors.muted}
         multiline
+        spellCheck
+        autoCorrect
+        autoCapitalize="sentences"
         maxLength={MAX}
         value={message}
         onChangeText={(t) => {
