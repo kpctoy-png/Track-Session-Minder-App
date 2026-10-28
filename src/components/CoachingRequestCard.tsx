@@ -7,7 +7,7 @@ import { useSchedule } from '@/lib/ScheduleStore';
 import { supabase } from '@/lib/supabase';
 import { colors } from './theme';
 
-type Request = { id: string; note: string | null; status: 'open' | 'booked' | 'declined' };
+type Request = { id: string; note: string | null; status: 'open' | 'booked' | 'declined'; paid: boolean };
 
 /**
  * My Day: a signed-in driver asks the organizers of the selected event for a coaching session, sees the price
@@ -27,7 +27,7 @@ export function CoachingRequestCard({ email }: { email: string }) {
     setProblem(null);
     supabase
       ?.from('coaching_requests')
-      .select('id, note, status')
+      .select('id, note, status, paid')
       .eq('event_id', event.id)
       .eq('email', email)
       .order('created_at', { ascending: false })
@@ -45,7 +45,7 @@ export function CoachingRequestCard({ email }: { email: string }) {
     const { data, error } = await supabase!
       .from('coaching_requests')
       .insert({ event_id: event.id, email, note: note.trim() || null })
-      .select('id, note, status')
+      .select('id, note, status, paid')
       .single();
     setBusy(false);
     if (error) return setProblem(`Not sent: ${error.message}`);
@@ -67,11 +67,13 @@ export function CoachingRequestCard({ email }: { email: string }) {
         <Text style={styles.title}>Coaching at {event.name}</Text>
         <Text style={styles.sub}>
           {request.status === 'booked'
-            ? `Booked. Your session shows above, and you got an email.${offer ? ` Pay ${offer.amount} at registration before your session.` : ''}`
-            : "Requested. The organizers will book you if there's room; you'll get an email and an alert either way."}
+            ? 'Booked. Your session shows above, and you got an email.'
+            : request.paid
+            ? "Accepted and paid. Your session will show here once it's scheduled."
+            : "Requested. See us at registration. We'll check for an open spot before you pay."}
           {request.note ? `\nYour note: ${request.note}` : ''}
         </Text>
-        {request.status === 'open' ? (
+        {request.status === 'open' && !request.paid ? (
           <Pressable onPress={withdraw}>
             <Text style={styles.link}>Withdraw request</Text>
           </Pressable>
@@ -90,7 +92,7 @@ export function CoachingRequestCard({ email }: { email: string }) {
           <TextInput
             id="coaching-request-note"
             style={styles.input}
-            placeholder="When suits you? (optional), e.g. Saturday afternoon"
+            placeholder="Anything we should know? Day, time, what you want to work on (optional)"
             placeholderTextColor={colors.muted}
             maxLength={200}
             value={note}

@@ -13,6 +13,7 @@ interface Request {
   id: string;
   email: string;
   note: string | null;
+  paid: boolean;
   created_at: string;
 }
 
@@ -48,14 +49,15 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   const [requests, setRequests] = useState<Request[]>([]);
   // The request being booked, marked booked once the booking saves.
   const [forRequest, setForRequest] = useState<string | null>(null);
-  // Declining tells the driver it's full, so it waits for a second tap.
+  // Declining tells the driver it's full, and accepting unlocks booking, so both wait for a second tap.
   const [declining, setDeclining] = useState<string | null>(null);
+  const [markingPaid, setMarkingPaid] = useState<string | null>(null);
 
   useEffect(() => {
     setRequests([]);
     supabase
       ?.from('coaching_requests')
-      .select('id, email, note, created_at')
+      .select('id, email, note, paid, created_at')
       .eq('event_id', event.id)
       .eq('status', 'open')
       .order('created_at')
@@ -67,6 +69,14 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
     if (error) return setError(error.message);
     setRequests((r) => r.filter((x) => x.id !== id));
   };
+
+  const markPaid = async (id: string) => {
+    setMarkingPaid(null);
+    const { error } = await supabase!.from('coaching_requests').update({ paid: true }).eq('id', id);
+    if (error) return setError(error.message);
+    setRequests((r) => r.map((x) => (x.id === id ? { ...x, paid: true } : x)));
+  };
+  const price = COACHING_OFFER[event.clubId]?.amount;
 
   useEffect(() => {
     setPaid([]);
@@ -235,30 +245,54 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
         <View style={styles.paid}>
           <Text style={styles.label}>Coaching requests: {requests.length}</Text>
           <Text style={styles.paidSub}>
-            Drivers who asked from the app. They pay at registration unless they already paid in ClubReg. Book
-            fills in their email; Decline tells them it's full.
+            Drivers who asked from the app. At registration, check there's an open spot, take payment and tap Accept; then
+            Book fills in their email. Drivers who paid in ClubReg can be booked straight away. Decline
+            tells them it's full.
           </Text>
           {requests.map((r) => {
             const reg = paid.find((p) => p.email === r.email);
+            const canBook = r.paid || !!reg;
             return (
               <View key={r.id}>
                 <View style={styles.paidRow}>
                   <View style={styles.rowBody}>
                     <Text style={styles.paidName}>{reg?.name || r.email}</Text>
                     <Text style={styles.rowSub}>
-                      {[reg ? `paid for ${reg.coaching} in ClubReg` : `collect ${COACHING_OFFER[event.clubId]?.amount ?? 'payment'} at registration`, r.note].filter(Boolean).join(' · ')}
+                      {[reg ? `paid for ${reg.coaching} in ClubReg` : r.paid ? 'accepted and paid' : 'not accepted yet', r.note].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
-                  <Pressable
-                    onPress={() => startBooking(reg ?? { name: '', email: r.email, run_group: null, coaching: 0 }, r.id)}
-                    style={[styles.btn, styles.btnPrimary]}
-                  >
-                    <Text style={[styles.btnText, styles.btnTextPrimary]}>Book</Text>
-                  </Pressable>
+                  {canBook ? (
+                    <Pressable
+                      onPress={() => startBooking(reg ?? { name: '', email: r.email, run_group: null, coaching: 0 }, r.id)}
+                      style={[styles.btn, styles.btnPrimary]}
+                    >
+                      <Text style={[styles.btnText, styles.btnTextPrimary]}>Book</Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable onPress={() => setMarkingPaid(markingPaid === r.id ? null : r.id)} style={[styles.btn, styles.btnPrimary]}>
+                      <Text style={[styles.btnText, styles.btnTextPrimary]}>Accept</Text>
+                    </Pressable>
+                  )}
                   <Pressable onPress={() => setDeclining(declining === r.id ? null : r.id)} style={styles.remove}>
                     <Text style={styles.removeText}>Decline</Text>
                   </Pressable>
                 </View>
+                {markingPaid === r.id ? (
+                  <View style={styles.confirm}>
+                    <Text style={styles.confirmText}>
+                      Is there an open coaching spot for {reg?.name || r.email}, and did they pay{price ? ` ${price}` : ''}? Only
+                      accept if there's room.
+                    </Text>
+                    <View style={styles.actions}>
+                      <Pressable onPress={() => markPaid(r.id)} style={[styles.btn, styles.btnPrimary]}>
+                        <Text style={[styles.btnText, styles.btnTextPrimary]}>Yes, accept</Text>
+                      </Pressable>
+                      <Pressable onPress={() => setMarkingPaid(null)} style={styles.btn}>
+                        <Text style={styles.btnText}>Not yet</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : null}
                 {declining === r.id ? (
                   <View style={styles.confirm}>
                     <Text style={styles.confirmText}>Decline {r.email}'s request? They get an email and alert saying coaching is full.</Text>
