@@ -205,6 +205,15 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   const [previewOffset, setPreviewOffset] = useState(0);
   const [coaching, setCoaching] = useState<CoachingSession[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+  // Announcements with an end time ("30 min") drop off every screen when it passes, without waiting for a reload.
+  useEffect(() => {
+    const ends = announcements.flatMap((a) => (a.endsAt ? [new Date(a.endsAt).getTime()] : []));
+    if (!ends.length) return;
+    const wait = Math.max(0, Math.min(...ends) - Date.now()) + 500;
+    const timer = setTimeout(() => setAnnouncements((all) => all.filter((a) => !a.endsAt || new Date(a.endsAt).getTime() > Date.now())), wait);
+    return () => clearTimeout(timer);
+  }, [announcements]);
   const [practiceEmail, setPracticeEmail] = useState<string | null>(null);
   // Without a database, feedback stays on this device.
   const [practiceFeedback, setPracticeFeedback] = useState<Feedback[]>([]);
