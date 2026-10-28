@@ -89,10 +89,11 @@ export function CoachingRequestCard({ email }: { email: string }) {
       {asking ? (
         <>
           <Text style={styles.terms}>{terms}</Text>
+          <Text style={styles.sub}>Requested sessions are not always available.</Text>
           <TextInput
             id="coaching-request-note"
             style={styles.input}
-            placeholder="Anything we should know? Day, time, what you want to work on (optional)"
+            placeholder="Please add your requested session here (optional)"
             placeholderTextColor={colors.muted}
             maxLength={200}
             value={note}
