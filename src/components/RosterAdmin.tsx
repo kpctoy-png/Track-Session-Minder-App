@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { useSchedule } from '@/lib/ScheduleStore';
 import { rosterFromCsv, rosterFromTable, type RosterRow } from '@/lib/roster';
 import { supabase } from '@/lib/supabase';
 import { isZip, readXlsx } from '@/lib/xlsx';
@@ -161,6 +162,7 @@ function ClubRegLink({ eventId }: { eventId: string }) {
   const [pulls, setPulls] = useState<Pull[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
   const [unlinking, setUnlinking] = useState(false);
+  const { events } = useSchedule();
 
   useEffect(() => {
     setLinked(null);
@@ -187,6 +189,17 @@ function ClubRegLink({ eventId }: { eventId: string }) {
     // Accepts the number, or a ClubReg link with the number at the end (signUp.cfm/event/16477).
     const id = /(\d{3,10})\D*$/.exec(draft.trim())?.[1];
     if (!id) return setProblem('Type the ClubReg event number, for example 16477.');
+    // One ClubReg event fills one list: linking it twice would copy the same drivers into both events.
+    const { data: taken } = await supabase!
+      .from('roster_sync')
+      .select('event_id')
+      .eq('clubreg_event_id', id)
+      .neq('event_id', eventId)
+      .limit(1);
+    if (taken?.length) {
+      const other = events.find((e) => e.id === taken[0].event_id)?.name ?? 'another event';
+      return setProblem(`ClubReg event ${id} is already linked to ${other}. Unlink it there first.`);
+    }
     const { error } = await supabase!.from('roster_sync').upsert({ event_id: eventId, clubreg_event_id: id });
     if (error) return setProblem(`Not saved: ${error.message}`);
     setProblem(null);
