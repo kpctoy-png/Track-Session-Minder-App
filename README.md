@@ -95,7 +95,8 @@ shorten sessions), which the organizer reviews before it is sent. Needs the
 
 Organizers can also upload the event's participant list (ClubReg's export, a CSV or an
 Excel sheet; a header row is optional) under Admin → Registered drivers. Announcements then
-offer "Also email the N registered drivers", sent by the `push-schedule`
+offer "Also email the N registered drivers" (everyone, or only chosen run groups such
+as Instructor, with or without showing it in the app), sent by the `push-schedule`
 function (`email` action) through the same Gmail account as the coaching
 emails (`SMTP_USER` / `SMTP_PASS`), 50 per message in Bcc. The list
 (`event_roster`) is visible only to the event's organizers and is deleted a

@@ -257,11 +257,13 @@ async function sendReminders() {
 const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 /**
- * Emails an announcement to everyone on the event's roster, 50 at a time in Bcc so nobody sees the
- * others' addresses. Returns how many addresses it went to.
+ * Emails an announcement to everyone on the event's roster (or only the given run groups), 50 at a time in
+ * Bcc so nobody sees the others' addresses. Returns how many addresses it went to.
  */
-async function emailRoster(eventId: string, eventName: string, message: string): Promise<number> {
-  const { data } = await db.from('event_roster').select('email').eq('event_id', eventId).not('email', 'is', null);
+async function emailRoster(eventId: string, eventName: string, message: string, groups?: string[]): Promise<number> {
+  let query = db.from('event_roster').select('email').eq('event_id', eventId).not('email', 'is', null);
+  if (groups) query = query.in('run_group', groups);
+  const { data } = await query;
   const emails = [...new Set((data ?? []).map((r) => r.email as string))];
   if (!emails.length) return 0;
   const from = Deno.env.get('SMTP_USER');
@@ -317,7 +319,8 @@ Deno.serve(async (req) => {
       const { data: event } = await db.from('events').select('name, club_id').eq('id', eventId).maybeSingle();
       if (!event || !message.trim()) return reply(400, { error: 'Unknown event or empty message' });
       if (!(await canManage(req, event.club_id))) return reply(403, { error: 'Not an organizer for this event' });
-      return reply(200, { emailed: await emailRoster(eventId, event.name, message) });
+      const groups = Array.isArray(input.groups) ? input.groups.map(String).slice(0, 20) : undefined;
+      return reply(200, { emailed: await emailRoster(eventId, event.name, message, groups?.length ? groups : undefined) });
     }
 
     if (input.action === 'booking' || input.action === 'reminders') {

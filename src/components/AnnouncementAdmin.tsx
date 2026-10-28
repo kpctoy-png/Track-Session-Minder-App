@@ -47,41 +47,71 @@ export function AnnouncementAdmin({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [recovery, setRecovery] = useState<Recovery | null>(null);
-  const [registered, setRegistered] = useState(0);
+  const [roster, setRoster] = useState<{ group: string; count: number }[]>([]);
   const [emailToo, setEmailToo] = useState(true);
+  /** Run groups to email; null emails everyone registered. */
+  const [groups, setGroups] = useState<string[] | null>(null);
+  const [inApp, setInApp] = useState(true);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   // After an icon is tapped, put the cursor back in the message so the organizer can finish it.
   const focusMessage = () => setTimeout(() => input.current?.focus(), 0);
 
   useEffect(() => {
-    setRegistered(0);
+    setRoster([]);
+    setGroups(null);
+    setInApp(true);
     supabase
       ?.from('event_roster')
-      .select('id', { count: 'exact', head: true })
+      .select('run_group')
       .eq('event_id', event.id)
       .not('email', 'is', null)
-      .then(({ count }) => setRegistered(count ?? 0));
+      .then(({ data }) => {
+        const counts = new Map<string, number>();
+        for (const r of data ?? []) counts.set(r.run_group ?? '', (counts.get(r.run_group ?? '') ?? 0) + 1);
+        setRoster([...counts].map(([group, count]) => ({ group, count })).sort((a, b) => a.group.localeCompare(b.group)));
+      });
   }, [event.id, rosterVersion]);
 
   const live = activeAnnouncements(announcements, event.id);
-  const emailing = !everyone && emailToo && registered > 0;
+  const registered = roster.reduce((n, g) => n + g.count, 0);
+  const named = roster.filter((g) => g.group);
+  const emailCount = groups ? roster.filter((g) => groups.includes(g.group)).reduce((n, g) => n + g.count, 0) : registered;
+  const emailing = !everyone && emailToo && emailCount > 0;
+  // The app and phone alerts can be skipped only when the message is going out by email instead.
+  const showing = inApp || !emailing;
   const audience = everyone ? 'every driver, on every event' : `every driver following ${event.name}`;
+  const emailWho = groups ? `${emailCount} registered ${groups.join(' / ')} drivers` : `${registered} registered drivers`;
+
+  const toggleGroup = (group: string) => {
+    const next = groups?.includes(group) ? groups.filter((g) => g !== group) : [...(groups ?? []), group];
+    setGroups(next.length ? next : null);
+    // A message for some run groups usually isn't for every driver's screen.
+    setInApp(!next.length);
+    setConfirming(false);
+  };
 
   const send = async () => {
     setBusy(true);
     setProblem(null);
     const text = message.trim();
-    const error = await postAnnouncement(everyone ? null : event.id, text, minutes);
+    if (showing) {
+      const error = await postAnnouncement(everyone ? null : event.id, text, minutes);
+      if (error) {
+        setBusy(false);
+        setConfirming(false);
+        return setProblem(error);
+      }
+      announceToPhones(everyone ? events.map((e) => e.id) : [event.id], text);
+    }
     setBusy(false);
     setConfirming(false);
-    if (error) return setProblem(error);
-    announceToPhones(everyone ? events.map((e) => e.id) : [event.id], text);
     setMessage('');
     if (!emailing) return onSent('Announcement sent to drivers');
-    onSent('Announcement sent to drivers · emailing…');
-    const mail = await emailRoster(event.id, announcementText(text));
-    if (mail.error) setProblem(`Shown in the app, but the email didn't go out: ${mail.error}`);
-    else onSent(`Announcement sent to drivers · emailed ${mail.emailed}`);
+    const sent = showing ? 'Announcement sent to drivers · ' : '';
+    onSent(`${sent}emailing…`);
+    const mail = await emailRoster(event.id, announcementText(text), groups ?? undefined);
+    if (mail.error) setProblem(`${showing ? 'Shown in the app, but the' : 'The'} email didn't go out: ${mail.error}`);
+    else onSent(`${sent}emailed ${mail.emailed}`);
   };
 
   const clear = async (id: string, eventId: string | null, createdAt: string) => {
@@ -187,14 +217,51 @@ export function AnnouncementAdmin({
           <Text style={styles.checkText}>Also email the {registered} registered drivers</Text>
         </Pressable>
       ) : null}
+      {emailing ? (
+        <>
+          {named.length > 0 && roster.length > 1 ? (
+            <>
+              <Text style={styles.label}>Email which run groups</Text>
+              <View style={styles.buttons}>
+                <Btn
+                  label={`All (${registered})`}
+                  selected={!groups}
+                  onPress={() => {
+                    setGroups(null);
+                    setInApp(true);
+                    setConfirming(false);
+                  }}
+                />
+                {named.map((g) => (
+                  <Btn key={g.group} label={`${g.group} (${g.count})`} selected={!!groups?.includes(g.group)} onPress={() => toggleGroup(g.group)} />
+                ))}
+              </View>
+            </>
+          ) : null}
+          <Pressable
+            onPress={() => {
+              setInApp(!inApp);
+              setConfirming(false);
+            }}
+            style={styles.check}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: inApp }}
+          >
+            <Text style={styles.checkBox}>{inApp ? '☑' : '☐'}</Text>
+            <Text style={styles.checkText}>Also show it in the app and alert every driver's phone</Text>
+          </Pressable>
+        </>
+      ) : null}
       {confirming ? (
         <View style={styles.confirm}>
           <Text style={styles.confirmText}>
-            Show this to {audience}
-            {emailing ? `, alert their phones, and email the ${registered} registered drivers?` : ', and alert their phones?'}{'\n\n'}“{announcementText(message.trim())}”
+            {showing
+              ? `Show this to ${audience}${emailing ? `, alert their phones, and email the ${emailWho}?` : ', and alert their phones?'}`
+              : `Email this only to the ${emailWho}? It won't show in the app.`}
+            {'\n\n'}“{announcementText(message.trim())}”
           </Text>
           <View style={styles.buttons}>
-            <Btn label={busy ? 'Sending…' : 'Send to drivers'} onPress={() => !busy && send()} primary />
+            <Btn label={busy ? 'Sending…' : showing ? 'Send to drivers' : 'Send email'} onPress={() => !busy && send()} primary />
             <Btn label="Cancel" onPress={() => setConfirming(false)} />
           </View>
         </View>
