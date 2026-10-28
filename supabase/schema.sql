@@ -525,6 +525,8 @@ create table if not exists coaching_requests (
   status text not null default 'open' check (status in ('open', 'booked', 'declined')),
   created_at timestamptz not null default now()
 );
+-- Requests are booked only once accepted: at registration an organizer checks there's room, takes payment and marks it paid.
+alter table coaching_requests add column if not exists paid boolean not null default false;
 create index if not exists coaching_requests_event on coaching_requests (event_id, created_at);
 create unique index if not exists coaching_requests_one_open on coaching_requests (event_id, email) where status = 'open';
 alter table coaching_requests enable row level security;
@@ -533,13 +535,13 @@ create policy "Drivers and organizers read requests" on coaching_requests for se
   using (email = lower(auth.jwt() ->> 'email') or can_announce(event_id));
 drop policy if exists "Drivers ask for coaching" on coaching_requests;
 create policy "Drivers ask for coaching" on coaching_requests for insert to authenticated
-  with check (email = lower(auth.jwt() ->> 'email') and status = 'open');
+  with check (email = lower(auth.jwt() ->> 'email') and status = 'open' and not paid);
 drop policy if exists "Organizers answer requests" on coaching_requests;
 create policy "Organizers answer requests" on coaching_requests for update to authenticated
   using (can_announce(event_id)) with check (can_announce(event_id));
 drop policy if exists "Drivers withdraw their request" on coaching_requests;
 create policy "Drivers withdraw their request" on coaching_requests for delete to authenticated
-  using (email = lower(auth.jwt() ->> 'email') or can_announce(event_id));
+  using ((email = lower(auth.jwt() ->> 'email') and not paid) or can_announce(event_id));
 
 create or replace function push_coaching_request() returns trigger
   language plpgsql security definer set search_path = public as $$

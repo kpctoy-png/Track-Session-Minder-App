@@ -330,7 +330,7 @@ async function coachingRequest(input: { type: string; record: CoachingRequest })
     const price = COACHING_PRICE[event.club_id];
     const clubReg = paid?.coaching
       ? `Already paid for ${paid.coaching} coaching in ClubReg.`
-      : `Not paid yet: if you book them, collect ${price ?? 'payment'} at registration.`;
+      : `Not paid yet. If there's an open spot when they come to registration, take payment${price ? ` (${price})` : ''}, tap Accept in Admin, then book it.`;
     const organizers = await organizerEmails(event.club_id);
     for (const email of organizers)
       await pushTo(await phonesOf(email), { title: `Coaching request · ${event.name}`, body: `${who}${r.note ? `: ${r.note}` : ''}`, tag: `request-${r.email}` });
@@ -346,19 +346,6 @@ async function coachingRequest(input: { type: string; record: CoachingRequest })
           `<p>${clubReg}</p>` +
           `<p>Book or decline it in <a href="${APP_URL}admin">Admin → Coaching</a>.</p>`,
       });
-  } else if (r.status === 'booked') {
-    // The booking email itself comes from notify-coaching; this adds how to pay unless they paid in ClubReg.
-    const { data: paid } = await db.from('event_roster').select('coaching').eq('event_id', r.event_id).eq('email', r.email).maybeSingle();
-    const price = COACHING_PRICE[event.club_id];
-    if (paid?.coaching || !price) return;
-    await gmail().sendMail({
-      from: `"${event.name.replace(/["<>]/g, '')} via Track Session Minder" <${from}>`,
-      to: r.email,
-      subject: `Coaching at ${event.name}: pay at registration`,
-      html:
-        `<p>Your coaching request at ${escape(event.name)} is booked. The session details are in the booking email and on the app's My Day tab.</p>` +
-        `<p>Please pay ${escape(price)} at registration before your session.</p>`,
-    });
   } else if (r.status === 'declined') {
     const body = `Sorry, coaching at ${event.name} is full, so we couldn't book you a session.`;
     await pushTo(await phonesOf(r.email), { title: event.name, body, tag: `request-${r.email}` });
