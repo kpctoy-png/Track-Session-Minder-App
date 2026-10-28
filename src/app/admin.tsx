@@ -290,7 +290,7 @@ export default function AdminScreen() {
             >
               <CoachingAdmin rosterVersion={rosterVersion} />
             </Collapsible>
-            <Collapsible id="roster" title="Registered drivers" summary="Participant list from ClubReg, for emailing announcements">
+            <Collapsible id="roster" title="Registered drivers" summary="Participant list from ClubReg, for texting and emailing drivers">
               <RosterAdmin eventId={event.id} eventName={event.name} onChange={() => setRosterVersion((v) => v + 1)} />
             </Collapsible>
             <Collapsible id="feedback" title="Feedback" summary={`Ratings and comments on ${event.name}`}>

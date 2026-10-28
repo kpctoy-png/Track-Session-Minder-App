@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { BookingKind } from '@/data/types';
 import { bookingName, COACHING_OFFER, coachingTimes, findClash, isEmail } from '@/lib/coaching';
@@ -32,7 +32,7 @@ interface Paid {
  * sessions are booked, and booking one fills in the form.
  */
 export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
-  const { event, day, coaching, addCoaching, removeCoaching } = useSchedule();
+  const { clubs, event, day, coaching, addCoaching, removeCoaching } = useSchedule();
   const [paid, setPaid] = useState<Paid[]>([]);
   const [forGroup, setForGroup] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -55,6 +55,21 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   // Declining tells the driver it's full, and accepting unlocks booking, so both wait for a second tap.
   const [declining, setDeclining] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  // Registered drivers' cell numbers by email, for the Text buttons.
+  const [cells, setCells] = useState<Map<string, string>>(new Map());
+  const club = clubs.find((c) => c.id === event.clubId)?.name;
+  /** A text in the same shape as announcement texts: event name, message, club sign-off. */
+  const textBody = (message: string) => [event.name, message, club ? `– ${club}` : ''].filter(Boolean).join('\n');
+
+  useEffect(() => {
+    setCells(new Map());
+    supabase
+      ?.from('event_roster')
+      .select('email, phone')
+      .eq('event_id', event.id)
+      .not('phone', 'is', null)
+      .then(({ data }) => setCells(new Map((data ?? []).filter((r) => r.phone).map((r) => [String(r.email).toLowerCase(), String(r.phone)]))));
+  }, [event.id, rosterVersion]);
 
   useEffect(() => {
     setRequests([]);
@@ -255,7 +270,8 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
     <View>
       <Text style={styles.sub}>
         Book a paid coaching session or a check ride for one student. The student and instructor each get an email, and see
-        it in the app after signing in on the My Day tab. Nobody can be booked twice at the same time.
+        it in the app after signing in on the My Day tab. Nobody can be booked twice at the same time. If the registered drivers
+        list has the student's cell number, Text opens Messages with the details written for you to send.
       </Text>
       {requests.length ? (
         <View style={styles.paid}>
@@ -289,6 +305,14 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
                       <Text style={[styles.btnText, styles.btnTextPrimary]}>Accept</Text>
                     </Pressable>
                   )}
+                  <TextButton
+                    phone={cells.get(r.email.toLowerCase())}
+                    body={textBody(
+                      canBook
+                        ? "Your coaching request is accepted. We'll text you your session time once it's booked."
+                        : "We got your coaching request. See us at registration and we'll check for an open spot before you pay.",
+                    )}
+                  />
                   <Pressable onPress={() => setDeclining(declining === r.id ? null : r.id)} style={styles.remove}>
                     <Text style={styles.removeText}>Decline</Text>
                   </Pressable>
@@ -322,6 +346,18 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
                       >
                         <Text style={styles.btnText}>Yes, decline</Text>
                       </Pressable>
+                      {cells.get(r.email.toLowerCase()) ? (
+                        <Pressable
+                          onPress={() => {
+                            setDeclining(null);
+                            answer(r.id, 'declined');
+                            openText(cells.get(r.email.toLowerCase())!, textBody("Sorry, coaching is full this time. Thanks for asking, and see you on track!"));
+                          }}
+                          style={[styles.btn, styles.btnDanger]}
+                        >
+                          <Text style={styles.btnText}>Decline and text them</Text>
+                        </Pressable>
+                      ) : null}
                       <Pressable onPress={() => setDeclining(null)} style={styles.btn}>
                         <Text style={styles.btnText}>Keep it</Text>
                       </Pressable>
@@ -373,6 +409,12 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
               {session.notes ? ` · ${session.notes}` : ''}
             </Text>
           </View>
+          <TextButton
+            phone={cells.get(session.studentEmail.toLowerCase())}
+            body={textBody(
+              `Your ${bookingName(session.kind).toLowerCase()} is ${day.label} ${formatRange({ start, end })}${session.coach ? ` with ${session.coach}` : ''}.`,
+            )}
+          />
           <Pressable
             onPress={() => setRemoving(removing === session.id ? null : session.id)}
             style={styles.remove}
@@ -446,6 +488,23 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
         </>
       )}
     </View>
+  );
+}
+
+/** Opens Messages with the text written and the driver filled in; the organizer checks it and taps Send. */
+function openText(phone: string, body: string) {
+  const ios = Platform.OS === 'ios' || (typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent));
+  const url = `sms:${phone}${ios ? '&' : '?'}body=${encodeURIComponent(body)}`;
+  if (typeof window !== 'undefined' && Platform.OS === 'web') window.location.href = url;
+  else Linking.openURL(url);
+}
+
+function TextButton({ phone, body }: { phone?: string; body: string }) {
+  if (!phone) return null;
+  return (
+    <Pressable onPress={() => openText(phone, body)} style={styles.btn} accessibilityLabel="Text this driver from your phone">
+      <Text style={styles.btnText}>Text</Text>
+    </Pressable>
   );
 }
 
