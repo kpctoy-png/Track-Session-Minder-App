@@ -110,7 +110,7 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
 
       <Section title="Stay in the loop">
         <Body>
-          Want to hear about a club's upcoming events? Leave your name and email on the Stay in the loop card on the My Day
+          Want to hear about a club's upcoming events? Leave your name, email and (optionally) cell number on the Stay in the loop card on the My Day
           tab (it also shows at the bottom of Now). It's optional, and only that club sees it.
         </Body>
       </Section>

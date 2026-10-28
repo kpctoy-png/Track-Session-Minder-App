@@ -32,7 +32,7 @@ export function PrivacyPolicy({ onDone }: { onDone: () => void }) {
           note. The club's organizers enter these.
         </Step>
         <Step>
-          The club's driver list: your name and email, only if you fill in “Stay in the loop” and tick the box.
+          The club's driver list: your name, email and (if you give it) cell number, only if you fill in “Stay in the loop” and tick the box.
         </Step>
         <Step>
           Registered drivers: your name, email and cell number from the event's registration site (for example ClubReg),

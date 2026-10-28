@@ -418,7 +418,7 @@ select cron.schedule('expire-alerts', '7 * * * *', $cron$
 $cron$);
 
 -- Drivers who chose to join a club's list from the Now tab ("Stay in the loop"),
--- agreeing that the club may email them. Each club sees only its own list.
+-- agreeing that the club may email or text them. Each club sees only its own list.
 -- Drivers add themselves through join_driver_list, which can't read the list back.
 create table if not exists driver_signups (
   club_id text not null references clubs (id) on delete cascade,
@@ -437,15 +437,18 @@ drop policy if exists "Organizers remove sign-ups" on driver_signups;
 create policy "Organizers remove sign-ups" on driver_signups for delete to authenticated
   using (can_manage_club(club_id));
 
--- Joining again with the same email just updates the name.
-create or replace function join_driver_list(signup_name text, signup_email text, signup_event text) returns void
+-- Joining again with the same email just updates the name (and the cell number, when given).
+alter table driver_signups add column if not exists phone text check (phone is null or phone ~ '^\+[0-9]{8,15}$');
+drop function if exists join_driver_list(text, text, text);
+create or replace function join_driver_list(signup_name text, signup_email text, signup_event text, signup_phone text default null) returns void
   language sql security definer set search_path = public as $$
-  insert into driver_signups (club_id, email, name, event_id)
-  select club_id, lower(trim(signup_email)), trim(signup_name), id from events where id = signup_event
-  on conflict (club_id, email) do update set name = excluded.name, event_id = excluded.event_id;
+  insert into driver_signups (club_id, email, name, event_id, phone)
+  select club_id, lower(trim(signup_email)), trim(signup_name), id, nullif(trim(signup_phone), '') from events where id = signup_event
+  on conflict (club_id, email) do update set name = excluded.name, event_id = excluded.event_id,
+    phone = coalesce(excluded.phone, driver_signups.phone);
 $$;
 
-grant execute on function join_driver_list(text, text, text) to anon, authenticated;
+grant execute on function join_driver_list(text, text, text, text) to anon, authenticated;
 
 -- Announcements: urgent messages (a lightning hold, a red flag) shown in red at
 -- the top of drivers' screens. An event's organizers post them for that event;

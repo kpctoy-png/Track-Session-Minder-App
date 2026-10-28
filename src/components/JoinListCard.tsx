@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { phoneNumber } from '@/lib/roster';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { supabase } from '@/lib/supabase';
 import { colors } from './theme';
@@ -49,6 +50,7 @@ export function JoinListCard({ always = false }: { always?: boolean }) {
   const [joinedBefore, setJoinedBefore] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [cell, setCell] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -77,13 +79,17 @@ export function JoinListCard({ always = false }: { always?: boolean }) {
     const cleanEmail = email.trim().toLowerCase();
     if (!name.trim()) return setProblem('Please enter your name.');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cleanEmail)) return setProblem('Please check your email address.');
-    if (!agreed) return setProblem(`Tick the box to let ${club.name} email you.`);
+    const phone = cell.trim() ? phoneNumber(cell) : undefined;
+    if (cell.trim() && !phone) return setProblem('Please check your cell number, or leave it blank.');
+    if (!agreed) return setProblem(`Tick the box to let ${club.name} contact you.`);
     setBusy(true);
     setProblem(null);
     const { error } = await supabase!.rpc('join_driver_list', {
       signup_name: name.trim(),
       signup_email: cleanEmail,
       signup_event: event.id,
+      // Sent only when given, so joining still works the same way without a number.
+      ...(phone ? { signup_phone: phone } : {}),
     });
     setBusy(false);
     if (error) return setProblem(`Couldn't sign you up: ${error.message}`);
@@ -100,7 +106,7 @@ export function JoinListCard({ always = false }: { always?: boolean }) {
   return (
     <View style={styles.card}>
       <Text style={styles.heading}>📬 Stay in the loop with {club.name}</Text>
-      <Text style={styles.text}>Leave your name and email to hear about their upcoming events. Optional.</Text>
+      <Text style={styles.text}>Leave your name, email and cell number to hear about their upcoming events. Optional.</Text>
       <TextInput
         style={styles.input}
         placeholder="Your name"
@@ -121,12 +127,22 @@ export function JoinListCard({ always = false }: { always?: boolean }) {
         autoCapitalize="none"
         maxLength={254}
       />
+      <TextInput
+        style={styles.input}
+        placeholder="Cell number for texts (optional)"
+        placeholderTextColor={colors.muted}
+        value={cell}
+        onChangeText={setCell}
+        autoComplete="tel"
+        keyboardType="phone-pad"
+        maxLength={20}
+      />
       <Pressable style={styles.row} onPress={() => {
           setAgreed(!agreed);
           setProblem(null);
         }}>
         <Text style={[styles.box, agreed && styles.boxOn]}>{agreed ? '✓' : ''}</Text>
-        <Text style={[styles.text, styles.grow]}>{club.name} may email me about their events. I can ask to be removed anytime.</Text>
+        <Text style={[styles.text, styles.grow]}>{club.name} may email or text me about their events. I can ask to be removed anytime.</Text>
       </Pressable>
       {problem ? <Text style={styles.problem}>{problem}</Text> : null}
       <View style={styles.row}>

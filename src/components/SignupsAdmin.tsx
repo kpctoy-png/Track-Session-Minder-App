@@ -10,6 +10,7 @@ import { colors } from './theme';
 interface Signup {
   email: string;
   name: string;
+  phone?: string | null;
   event_id: string | null;
   created_at: string;
 }
@@ -24,13 +25,13 @@ export function SignupsAdmin({ clubId }: { clubId: string }) {
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const { data, error } = await supabase
-      .from('driver_signups')
-      .select('email, name, event_id, created_at')
-      .eq('club_id', clubId)
-      .order('created_at', { ascending: false });
+    const query = (columns: string) =>
+      supabase!.from('driver_signups').select(columns).eq('club_id', clubId).order('created_at', { ascending: false });
+    let { data, error } = await query('email, name, phone, event_id, created_at');
+    // Before the cell number column is added in Supabase, read the list without it.
+    if (error && /phone/.test(error.message)) ({ data, error } = await query('email, name, event_id, created_at'));
     if (error) setError(error.message);
-    else setRows(data);
+    else setRows(data as unknown as Signup[]);
   }, [clubId]);
 
   // Reload each time the Admin tab is shown, so new sign-ups appear without a refresh.
@@ -52,8 +53,8 @@ export function SignupsAdmin({ clubId }: { clubId: string }) {
     if (!rows) return;
     const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const csv = [
-      'Name,Email,Signed up at event,Date',
-      ...rows.map((r) => [r.name, r.email, events.find((e) => e.id === r.event_id)?.name ?? '', r.created_at.slice(0, 10)].map(cell).join(',')),
+      'Name,Email,Phone,Signed up at event,Date',
+      ...rows.map((r) => [r.name, r.email, r.phone ?? '', events.find((e) => e.id === r.event_id)?.name ?? '', r.created_at.slice(0, 10)].map(cell).join(',')),
     ].join('\r\n');
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -67,7 +68,7 @@ export function SignupsAdmin({ clubId }: { clubId: string }) {
 
   return (
     <View>
-      <Text style={styles.sub}>Drivers who chose "Join the list" on the Now tab and agreed to be emailed.</Text>
+      <Text style={styles.sub}>Drivers who chose "Join the list" on the Now or My Day tab and agreed to be emailed or texted.</Text>
       {error ? (
         <Text style={styles.sub}>Couldn't load the list: {error}</Text>
       ) : !rows ? (
@@ -89,7 +90,7 @@ export function SignupsAdmin({ clubId }: { clubId: string }) {
               <View style={styles.grow}>
                 <Text style={styles.name}>{r.name}</Text>
                 <Text style={styles.detail}>
-                  {r.email} · {shortDate(r.created_at.slice(0, 10))}
+                  {[r.email, r.phone, shortDate(r.created_at.slice(0, 10))].filter(Boolean).join(' · ')}
                 </Text>
               </View>
               {removing === r.email ? (
