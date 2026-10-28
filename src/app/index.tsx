@@ -14,11 +14,12 @@ import { colors, itemColors } from '@/components/theme';
 import type { Club, ScheduleItem } from '@/data/types';
 import { bookingName, coachingTimes, coachingTitle, sessionsFor } from '@/lib/coaching';
 import { daysBetween, shortDate, todayISO } from '@/lib/dates';
-import { useSchedule } from '@/lib/ScheduleStore';
+import { useSchedule, useSeconds } from '@/lib/ScheduleStore';
 import { countdown, firstSessionNote, formatRange, formatTime, fromMinutes, getNowState, sortItems, toMinutes } from '@/lib/schedule';
 
 export default function NowScreen() {
   const { clubs, events, event, day, clock, hasEvents, coaching, myEmail, selectEvent, selectDay } = useSchedule();
+  const seconds = useSeconds();
   // On days without an event, the live cards would describe another day; they only show when asked for.
   const [previewing, setPreviewing] = useState(false);
   if (!hasEvents) return <LoadingOrError status="live" />;
@@ -69,8 +70,8 @@ export default function NowScreen() {
             toMinutes(myCoaching.end) <= clock.minuteOfDay
               ? `Booked for ${day.label}, ${shortDate(day.date)}`
               : toMinutes(myCoaching.start) <= clock.minuteOfDay
-              ? `Happening now · ends in ${countdown(clock.minuteOfDay, myCoaching.end, clock.seconds)}`
-              : `Starts in ${countdown(clock.minuteOfDay, myCoaching.start, clock.seconds)}`
+              ? `Happening now · ends in ${countdown(clock.minuteOfDay, myCoaching.end, seconds)}`
+              : `Starts in ${countdown(clock.minuteOfDay, myCoaching.start, seconds)}`
           }
           notes={myCoaching.session.notes}
           highlight
@@ -109,7 +110,7 @@ export default function NowScreen() {
           item={state.onTrack}
           big
           note={firstSessionNote(event.clubId, day.items, state.onTrack)}
-          subtitle={`Ends in ${countdown(clock.minuteOfDay, state.onTrack.end, clock.seconds)}`}
+          subtitle={`Ends in ${countdown(clock.minuteOfDay, state.onTrack.end, seconds)}`}
         />
       ) : (
         <Card label="On track now" title="Track is quiet" subtitle="Nothing on track right now" />
@@ -120,7 +121,7 @@ export default function NowScreen() {
           label="Up next"
           item={state.upNext}
           note={firstSessionNote(event.clubId, day.items, state.upNext)}
-          subtitle={`Starts in ${countdown(clock.minuteOfDay, state.upNext.start, clock.seconds)}`}
+          subtitle={`Starts in ${countdown(clock.minuteOfDay, state.upNext.start, seconds)}`}
         />
       ) : null}
 

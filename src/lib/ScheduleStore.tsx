@@ -4,7 +4,8 @@
 // admin changes only affect this device.
 
 import type { Session } from '@supabase/supabase-js';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
 import { LoadingOrError } from '@/components/LoadingOrError';
@@ -17,7 +18,6 @@ import { supabase } from './supabase';
 
 interface Clock {
   minuteOfDay: number;
-  seconds: number;
   /** True when the selected day isn't today. The preview keeps ticking with the real clock, shifted by the admin's scrubbing. */
   isPreview: boolean;
   setPreviewMinute: (minute: number) => void;
@@ -218,9 +218,21 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
   // Without a database, feedback stays on this device.
   const [practiceFeedback, setPracticeFeedback] = useState<Feedback[]>([]);
 
+  // Redrawing every screen each second drains phone batteries, so the shared clock moves once a minute, on the minute.
+  // The Now screen counts down the seconds on its own while it's open (useSeconds).
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(timer);
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      setNow(new Date());
+      timer = setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50);
+    };
+    timer = setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50);
+    // A phone waking from sleep catches up straight away.
+    const appState = AppState.addEventListener('change', (state) => state === 'active' && setNow(new Date()));
+    return () => {
+      clearTimeout(timer);
+      appState.remove();
+    };
   }, []);
 
   // Load from the database, then keep listening for changes.
@@ -508,7 +520,6 @@ export function ScheduleProvider({ children }: { children: ReactNode }) {
       canManage,
       clock: {
         minuteOfDay: isLive ? nowMinute : (((nowMinute + previewOffset) % 1440) + 1440) % 1440,
-        seconds: now.getSeconds(),
         isPreview: !isLive,
         setPreviewMinute: (minute) => setPreviewOffset(minute - nowMinute),
         resetPreview: () => setPreviewOffset(0),
@@ -524,4 +535,17 @@ export function useSchedule(): ScheduleStore {
   const store = useContext(Context);
   if (!store) throw new Error('useSchedule must be used inside ScheduleProvider');
   return store;
+}
+
+/** Seconds past the minute, ticking each second only while the calling screen is open. */
+export function useSeconds(): number {
+  const [seconds, setSeconds] = useState(() => new Date().getSeconds());
+  useFocusEffect(
+    useCallback(() => {
+      setSeconds(new Date().getSeconds());
+      const timer = setInterval(() => setSeconds(new Date().getSeconds()), 1000);
+      return () => clearInterval(timer);
+    }, []),
+  );
+  return seconds;
 }

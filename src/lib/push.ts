@@ -183,9 +183,10 @@ export function announceToPhones(eventIds: string[], message: string) {
 }
 
 /** Emails an announcement to the event's registered drivers. Resolves to how many it went to, or an error. */
-export async function emailRoster(eventId: string, message: string, groups?: string[]): Promise<{ emailed?: number; error?: string }> {
+/** Emails the event's registered drivers (or just those with no cell number, when the rest are being texted). */
+export async function emailRoster(eventId: string, message: string, groups?: string[], noPhone = false): Promise<{ emailed?: number; error?: string }> {
   if (!supabase) return { error: 'Not connected' };
-  const { data, error } = await supabase.functions.invoke('push-schedule', { body: { action: 'email', eventId, message, groups } });
+  const { data, error } = await supabase.functions.invoke('push-schedule', { body: { action: 'email', eventId, message, groups, noPhone } });
   if (error) return { error: error.message };
   return { emailed: data?.emailed ?? 0 };
 }

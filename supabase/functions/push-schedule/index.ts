@@ -280,9 +280,11 @@ const gmail = () =>
  * Emails an announcement to everyone on the event's roster (or only the given run groups), 50 at a time in
  * Bcc so nobody sees the others' addresses. Returns how many addresses it went to.
  */
-async function emailRoster(eventId: string, eventName: string, message: string, groups?: string[]): Promise<number> {
+async function emailRoster(eventId: string, eventName: string, message: string, groups?: string[], noPhone = false): Promise<number> {
   let query = db.from('event_roster').select('email').eq('event_id', eventId).not('email', 'is', null);
   if (groups) query = query.in('run_group', groups);
+  // Drivers being texted from the organizer's iPhone; only the ones with no cell number need the email.
+  if (noPhone) query = query.is('phone', null);
   const { data } = await query;
   const emails = [...new Set((data ?? []).map((r) => r.email as string))];
   if (!emails.length) return 0;
@@ -451,7 +453,7 @@ Deno.serve(async (req) => {
       if (!event || !message.trim()) return reply(400, { error: 'Unknown event or empty message' });
       if (!(await canManage(req, event.club_id))) return reply(403, { error: 'Not an organizer for this event' });
       const groups = Array.isArray(input.groups) ? input.groups.map(String).slice(0, 20) : undefined;
-      return reply(200, { emailed: await emailRoster(eventId, event.name, message, groups?.length ? groups : undefined) });
+      return reply(200, { emailed: await emailRoster(eventId, event.name, message, groups?.length ? groups : undefined, input.noPhone === true) });
     }
 
     if (input.action === 'roster-due' || input.action === 'roster-pull' || input.action === 'roster-link') {
