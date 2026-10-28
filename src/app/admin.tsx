@@ -23,7 +23,15 @@ import { formatRange, formatTime, fromMinutes, shiftSchedule, sortItems, spreadC
 import { supabase } from '@/lib/supabase';
 
 export default function AdminScreen() {
-  const { clubs, event, day, clock, coaching, updateDay, deleteEvent, session, sync, hasEvents, manageableClubs, canManage, isPlatformAdmin } = useSchedule();
+  const { clubs, events, event, day, clock, coaching, updateDay, deleteEvent, selectEvent, session, sync, hasEvents, manageableClubs, canManage, isPlatformAdmin } =
+    useSchedule();
+  // Organizers only see their own club's events here; Redline sees every club's.
+  const myEvents = isPlatformAdmin ? null : events.filter((e) => canManage(e.clubId));
+  const ownEvent = !myEvents || myEvents.some((e) => e.id === event.id);
+  useEffect(() => {
+    if (!ownEvent && myEvents?.length) selectEvent(myEvents[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownEvent, myEvents?.length]);
   const [editing, setEditing] = useState<string | null>(null);
   // The session being edited: time changes are staged here and only sent once confirmed.
   const [draft, setDraft] = useState<ScheduleItem | null>(null);
@@ -176,8 +184,8 @@ export default function AdminScreen() {
           )}
         </View>
         {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
-        {hasEvents ? <EventPicker /> : null}
-        {hasEvents ? <PreviewClock /> : null}
+        {hasEvents && ownEvent ? <EventPicker only={myEvents ?? undefined} /> : null}
+        {hasEvents && ownEvent ? <PreviewClock /> : null}
 
         {editable ? (
           <>
@@ -307,7 +315,9 @@ export default function AdminScreen() {
                 ? 'There are no events yet. Tap + New event to add one.'
                 : 'There are no events yet, and this account is not an organizer account.'
               : manageableClubs.length
-                ? `${clubName} events can only be changed by ${clubName} admins. Choose one of your own events to edit.`
+                ? ownEvent
+                  ? `${clubName} events can only be changed by ${clubName} admins. Choose one of your own events to edit.`
+                  : 'Your club has no events yet. Tap + New event to add one.'
                 : 'This account is not an organizer account, so it can view schedules but not change them.'}
           </Text>
         )}
