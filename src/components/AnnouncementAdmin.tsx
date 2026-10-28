@@ -244,7 +244,7 @@ export function AnnouncementAdmin({
           accessibilityState={{ checked: textToo }}
         >
           <Text style={styles.checkBox}>{textToo ? '☑' : '☐'}</Text>
-          <Text style={styles.checkText}>Also text the {allPhones} drivers with a cell number (from your iPhone)</Text>
+          <Text style={styles.checkText}>Also text the {allPhones === 1 ? '1 driver' : `${allPhones} drivers`} with a cell number (from your iPhone)</Text>
         </Pressable>
       ) : null}
       {!everyone && registered > 0 ? (
@@ -258,7 +258,7 @@ export function AnnouncementAdmin({
           accessibilityState={{ checked: emailToo }}
         >
           <Text style={styles.checkBox}>{emailToo ? '☑' : '☐'}</Text>
-          <Text style={styles.checkText}>Also email the {registered} registered drivers</Text>
+          <Text style={styles.checkText}>Also email the {registered === 1 ? '1 registered driver' : `${registered} registered drivers`}</Text>
         </Pressable>
       ) : null}
       {reaching ? (

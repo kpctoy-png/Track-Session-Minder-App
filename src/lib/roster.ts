@@ -16,7 +16,9 @@ export interface RosterRow {
 
 /** "(912) 555-0100", "912.555.0100" or "+1 912 555 0100" -> "+19125550100"; anything that isn't a phone number -> undefined. */
 export function phoneNumber(cell: string | undefined): string | undefined {
-  const raw = (cell ?? '').trim();
+  let raw = (cell ?? '').trim();
+  // Google Sheets sends a number typed without dashes as 9.786183101E9.
+  if (/^\d(\.\d+)?e\+?\d{1,2}$/i.test(raw)) raw = Number(raw).toFixed(0);
   if (!raw || /[a-z@]/i.test(raw.replace(/\b(ext|x)\.?\s*\d+$/i, ''))) return undefined;
   const digits = raw.replace(/\b(ext|x)\.?\s*\d+$/i, '').replace(/\D/g, '');
   if (digits.length === 10) return `+1${digits}`;
