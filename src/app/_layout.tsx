@@ -6,6 +6,13 @@ import { OpeningScreen } from '@/components/OpeningScreen';
 import { colors } from '@/components/theme';
 import { ScheduleProvider, useSchedule } from '@/lib/ScheduleStore';
 
+// iPhones and iPads zoom the page in when a text box under 16px is tapped or pasted into, and leave it zoomed.
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = 'input, textarea, select { font-size: max(16px, 1em) !important; }';
+  document.head.appendChild(style);
+}
+
 function icon(glyph: string) {
   return ({ color }: { color: ColorValue }) => <Text style={{ color, fontSize: 18 }}>{glyph}</Text>;
 }
