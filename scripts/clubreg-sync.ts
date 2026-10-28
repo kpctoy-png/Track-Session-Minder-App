@@ -149,6 +149,7 @@ async function exportList(page: import('playwright').Page, clubregEventId: strin
   }
   if (!first) throw new Error(`Couldn't find Report Builder's Email column.\n${await describe(page)}`);
   console.log(`Report Builder columns ticked: ${ticked.join(', ')}`);
+  console.log(`Report Builder has: ${labels.filter(Boolean).join(' | ').slice(0, 1500)}`);
   // Report Builder's own Export, in the same form as its columns (the menu has a hidden "Export All Registrants").
   const exportButton = 'input[type=submit][value*="Export" i]:visible, input[type=button][value*="Export" i]:visible, button:has-text("Export"):visible, a:has-text("Export"):visible';
   const form = first.locator('xpath=ancestor::form[1]');
