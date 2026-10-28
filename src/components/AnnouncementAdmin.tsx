@@ -321,7 +321,11 @@ export function AnnouncementAdmin({
           />
         </View>
       )}
-      {textBatch ? <TextDrivers batch={textBatch} onDone={() => setTextBatch(null)} /> : null}
+      {textBatch ? <TextDrivers
+          batch={textBatch}
+          onDone={() => setTextBatch(null)}
+          onTexting={() => onSent(`Texting ${plural(textBatch.phones.length)} from your iPhone. Keep Shortcuts open until it finishes.`)}
+        /> : null}
       {problem ? <Text style={styles.problem}>{problem}</Text> : null}
     </View>
   );
@@ -352,8 +356,7 @@ export const TEXT_SHORTCUT = 'Text Drivers';
  * Hands the message and numbers to the Text Drivers shortcut on the organizer's iPhone, which sends each driver
  * their own text from the organizer's number. Web pages can't send texts themselves.
  */
-function TextDrivers({ batch, onDone }: { batch: { message: string; phones: string[] }; onDone: () => void }) {
-  const [opened, setOpened] = useState(false);
+function TextDrivers({ batch, onDone, onTexting }: { batch: { message: string; phones: string[] }; onDone: () => void; onTexting: () => void }) {
   const url = `shortcuts://run-shortcut?name=${encodeURIComponent(TEXT_SHORTCUT)}&input=text&text=${encodeURIComponent(JSON.stringify(batch))}`;
   // The texts aren't sent until this button is tapped, so bring the card into view rather than leave it below the fold.
   useEffect(() => {
@@ -361,23 +364,23 @@ function TextDrivers({ batch, onDone }: { batch: { message: string; phones: stri
   }, []);
   return (
     <View style={[styles.confirm, styles.textCard]} nativeID="text-drivers">
-      <Text style={styles.textCardTitle}>{opened ? '📱 Texting…' : '📱 One more step: the texts are not sent yet'}</Text>
+      <Text style={styles.textCardTitle}>📱 One more step: the texts are not sent yet</Text>
       <Text style={styles.confirmText}>
-        {opened
-          ? `The ${TEXT_SHORTCUT} shortcut is texting ${plural(batch.phones.length)}. Keep the Shortcuts app open until it finishes.`
-          : `Now text ${plural(batch.phones.length)} from your iPhone:`}
+        Now text {plural(batch.phones.length)} from your iPhone:
         {'\n\n'}“{batch.message}”
       </Text>
       <View style={styles.buttons}>
         <Btn
-          label={opened ? 'Send the texts again' : `Text ${plural(batch.phones.length)}`}
-          primary={!opened}
+          label={`Text ${plural(batch.phones.length)}`}
+          primary
           onPress={() => {
-            setOpened(true);
+            // Hand the texts to the shortcut and close the card, so there's no second button to send them twice.
             if (typeof window !== 'undefined') window.location.href = url;
+            onTexting();
+            onDone();
           }}
         />
-        <Btn label={opened ? 'Done' : 'Skip texts'} onPress={onDone} />
+        <Btn label="Skip texts" onPress={onDone} />
       </View>
     </View>
   );
