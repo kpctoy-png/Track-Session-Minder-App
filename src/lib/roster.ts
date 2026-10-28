@@ -1,5 +1,5 @@
-// Reading a registration site's participant list: a CSV, or ClubReg's Report Builder export (an .xls file that
-// is really an HTML table).
+// Reading a registration site's participant list: a CSV, an Excel (.xlsx) sheet, or ClubReg's Report Builder
+// export (an .xls file that is really an HTML table).
 
 import type { RunGroupId } from '@/data/types';
 
@@ -67,9 +67,16 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
  */
 export function rosterFromCsv(text: string): { rows: RosterRow[]; problem?: string } {
   const clean = text.replace(/^\uFEFF/, '');
-  const table = /<table/i.test(clean) ? parseHtmlTable(clean) : parseCsv(clean);
-  const headerAt = table.findIndex((r) => r.some((c) => /e-?mail/i.test(c)));
-  if (headerAt < 0) return { rows: [], problem: "Couldn't find an Email column. Is this the participant list (ClubReg export or CSV)?" };
+  return rosterFromTable(/<table/i.test(clean) ? parseHtmlTable(clean) : parseCsv(clean));
+}
+
+/**
+ * The participants in a table of cells. The header row is the first with an Email heading. With no header row,
+ * the column of email addresses is used and the other cells in each row make the name.
+ */
+export function rosterFromTable(table: string[][]): { rows: RosterRow[]; problem?: string } {
+  const headerAt = table.findIndex((r) => r.some((c) => /e-?mail/i.test(c) && !c.includes('@')));
+  if (headerAt < 0) return headerless(table);
   const header = table[headerAt].map((c) => c.trim().toLowerCase());
   const col = (test: RegExp) => header.findIndex((h) => test.test(h));
   const email = col(/e-?mail/);
@@ -98,6 +105,21 @@ export function rosterFromCsv(text: string): { rows: RosterRow[]; problem?: stri
     });
   }
   if (!rows.length) return { rows, problem: 'The Email column has no email addresses in it.' };
+  return { rows };
+}
+
+function headerless(table: string[][]): { rows: RosterRow[]; problem?: string } {
+  const email = table.reduce((found, r) => (found >= 0 ? found : r.findIndex((c) => EMAIL.test(c.trim()))), -1);
+  if (email < 0) return { rows: [], problem: "Couldn't find any email addresses. Is this the participant list (ClubReg export, CSV or Excel)?" };
+  const seen = new Set<string>();
+  const rows: RosterRow[] = [];
+  for (const r of table) {
+    const address = (r[email] ?? '').trim().toLowerCase();
+    if (!EMAIL.test(address) || seen.has(address)) continue;
+    seen.add(address);
+    const name = r.filter((c, i) => i !== email && /[a-z]/i.test(c)).join(' ');
+    rows.push({ name: name.trim().replace(/\s+/g, ' ').slice(0, 200), email: address.slice(0, 254), coaching: 0 });
+  }
   return { rows };
 }
 

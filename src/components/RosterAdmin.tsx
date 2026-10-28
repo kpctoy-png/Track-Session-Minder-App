@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { rosterFromCsv, type RosterRow } from '@/lib/roster';
+import { rosterFromCsv, rosterFromTable, type RosterRow } from '@/lib/roster';
 import { supabase } from '@/lib/supabase';
+import { isZip, readXlsx } from '@/lib/xlsx';
 import { colors } from './theme';
 
 /**
- * The event's registered drivers, uploaded from the registration site's participant list (CSV), so
+ * The event's registered drivers, uploaded from the registration site's participant list (CSV, Excel or ClubReg export), so
  * announcements can also be emailed to everyone at the event. Uploading replaces the list.
  */
 export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string; eventName: string; onChange: () => void }) {
@@ -35,11 +36,18 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
   const pick = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.xls,.csv,text/csv,text/plain,text/html';
+    input.accept = '.xls,.xlsx,.csv,text/csv,text/plain,text/html,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      const { rows, problem } = rosterFromCsv(await file.text());
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let read: ReturnType<typeof rosterFromCsv>;
+      try {
+        read = isZip(bytes) ? rosterFromTable(await readXlsx(bytes)) : rosterFromCsv(new TextDecoder().decode(bytes));
+      } catch {
+        read = { rows: [], problem: "Couldn't read that file. Try saving it as CSV." };
+      }
+      const { rows, problem } = read;
       setError(problem ?? null);
       setUpload(problem ? null : { file: file.name, rows });
     };
@@ -75,7 +83,7 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
       <Text style={styles.sub}>
         Upload the participant list so announcements can be emailed to everyone at {eventName}, including drivers who
         haven't opened the app. In ClubReg: This Event → Reports → Report Builder, tick Email, Export, and upload the
-        file it saves (a CSV from another site works too). Cancelled entries are skipped. Only organizers see this
+        file it saves (a CSV or Excel sheet works too). Cancelled entries are skipped. Only organizers see this
         list, and it's deleted a week after the event.
       </Text>
       {Platform.OS === 'web' ? (
