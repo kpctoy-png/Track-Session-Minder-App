@@ -40,7 +40,7 @@ export function AnnouncementAdmin({
   /** Changes when the registered drivers list is uploaded or deleted, to recount it. */
   rosterVersion: number;
 }) {
-  const { event, events, day, announcements, isPlatformAdmin, postAnnouncement, clearAnnouncement } = useSchedule();
+  const { clubs, event, events, day, announcements, isPlatformAdmin, postAnnouncement, clearAnnouncement } = useSchedule();
   const [message, setMessage] = useState('');
   const [minutes, setMinutes] = useState<number | null>(null);
   const [everyone, setEveryone] = useState(false);
@@ -125,7 +125,9 @@ export function AnnouncementAdmin({
     setBusy(false);
     setConfirming(false);
     setMessage('');
-    if (texting) setTextBatch({ message: `${event.name}: ${announcementText(text)}`, phones });
+    // Event name on top and the club's name at the bottom, so drivers know who is texting from an unsaved number.
+    const club = clubs.find((c) => c.id === event.clubId)?.name;
+    if (texting) setTextBatch({ message: [event.name, announcementText(text), club ? `– ${club}` : ''].filter(Boolean).join('\n'), phones });
     if (!emailing) return onSent(showing ? 'Announcement sent to drivers' : 'Ready to text');
     const sent = showing ? 'Announcement sent to drivers · ' : '';
     onSent(`${sent}emailing…`);
