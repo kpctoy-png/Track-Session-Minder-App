@@ -120,6 +120,9 @@ export function CoachingRequestCard({ email }: { email: string }) {
             style={styles.input}
             placeholder="Please add your requested session here (optional)"
             placeholderTextColor={colors.muted}
+            spellCheck
+            autoCorrect
+            autoCapitalize="sentences"
             maxLength={200}
             value={note}
             onChangeText={setNote}
