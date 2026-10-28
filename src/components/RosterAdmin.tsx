@@ -62,6 +62,7 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
     const id = sheetIdFromLink(sheetLink);
     if (!id) return setError('That doesn\'t look like a Google Sheet link. Copy it from the address bar of the sheet.');
     setError(null);
+    setUpload(null);
     setFetching(true);
     let read: ReturnType<typeof rosterFromCsv>;
     try {
@@ -137,7 +138,7 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
         <View style={styles.confirm}>
           <Text style={styles.confirmText}>
             Found {upload.rows.length} {upload.rows.length === 1 ? 'driver' : 'drivers'} with an email in {upload.file}
-            {paidFor(upload.rows) ? `, ${paidFor(upload.rows)} of them paid for coaching` : ''}.
+            {paidFor(upload.rows) ? `, ${paidFor(upload.rows)} of them paid for coaching` : ''}.{groupsIn(upload.rows)}
             {rows?.length ? ` This replaces the ${rows.length} already on the list.` : ''} Save the list for {eventName}?
           </Text>
           <View style={styles.buttons}>
@@ -315,6 +316,14 @@ function shownPulls(pulls: Pull[]): Pull[] {
 }
 
 const paidFor = (rows: RosterRow[]) => rows.filter((r) => r.coaching).length;
+
+/** " Run groups: Advanced 1, Novice 1." so the organizer can see the groups were read. */
+function groupsIn(rows: RosterRow[]): string {
+  const counts = new Map<string, number>();
+  for (const r of rows) if (r.runGroup) counts.set(r.runGroup, (counts.get(r.runGroup) ?? 0) + 1);
+  if (!counts.size) return ' No run groups found.';
+  return ` Run groups: ${[...counts].sort().map(([g, n]) => `${g} ${n}`).join(', ')}.`;
+}
 
 const styles = StyleSheet.create({
   sheetNote: { marginTop: 6, marginBottom: 10 },
