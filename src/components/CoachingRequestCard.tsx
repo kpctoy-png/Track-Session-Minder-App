@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { COACHING_OFFER } from '@/lib/coaching';
-import { todayISO } from '@/lib/dates';
+import { COACHING_OFFER, coachingTimes } from '@/lib/coaching';
+import { shortDate, todayISO } from '@/lib/dates';
+import { formatRange } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { supabase } from '@/lib/supabase';
 import { colors } from './theme';
@@ -17,7 +18,14 @@ export function CoachingRequestCard({ email }: { email: string }) {
   const { event, coaching } = useSchedule();
   // A booking for this driver arrives live; it's the moment their request turns booked, so look again then.
   const eventDays = new Set(event.days.map((d) => d.id));
-  const myBookings = coaching.filter((c) => c.studentEmail === email && c.kind !== 'checkride' && eventDays.has(c.dayId)).length;
+  const mine = coaching
+    .filter((c) => c.studentEmail === email && c.kind !== 'checkride' && eventDays.has(c.dayId))
+    .map((c) => {
+      const day = event.days.find((d) => d.id === c.dayId)!;
+      return { session: c, day, ...coachingTimes(c, day) };
+    })
+    .sort((a, b) => (a.day.date + a.start).localeCompare(b.day.date + b.start));
+  const myBookings = mine.length;
   const [request, setRequest] = useState<Request | null>(null);
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState('');
@@ -70,12 +78,26 @@ export function CoachingRequestCard({ email }: { email: string }) {
         {/* Accepted and then a session booked counts as booked, even before the request itself is marked. */}
         <Text style={styles.sub}>
           {request.status === 'booked' || (request.paid && myBookings > 0)
-            ? 'Booked. Your session shows above, and you got an email.'
+            ? `Confirmed. You're booked for ${myBookings === 1 ? 'this session' : 'these sessions'}:`
             : request.paid
-            ? "Accepted and paid. Your session will show above once it's scheduled."
+            ? "Accepted and paid. Your session and time will show here once it's scheduled."
             : "Requested. See us at registration. We'll check for an open spot before you pay."}
-          {request.note ? `\nYour note: ${request.note}` : ''}
+          {request.note && !myBookings ? `\nYour note: ${request.note}` : ''}
         </Text>
+        {request.paid || request.status === 'booked'
+          ? mine.map(({ session, day, start, end }) => (
+              <View key={session.id} style={styles.booked}>
+                <Text style={styles.bookedDay}>
+                  {day.label} {shortDate(day.date)}
+                </Text>
+                <Text style={styles.bookedTime}>{formatRange({ start, end })}</Text>
+                {day.items.find((i) => i.id === session.itemId)?.title ? (
+                  <Text style={styles.bookedItem}>{day.items.find((i) => i.id === session.itemId)!.title}</Text>
+                ) : null}
+                <Text style={styles.sub}>{[session.coach ? `Coach: ${session.coach}` : null, session.notes].filter(Boolean).join(' · ')}</Text>
+              </View>
+            ))
+          : null}
         {request.status === 'open' && !request.paid ? (
           <Pressable onPress={withdraw}>
             <Text style={styles.link}>Withdraw request</Text>
@@ -137,5 +159,9 @@ const styles = StyleSheet.create({
   primaryText: { color: '#000', fontWeight: '700' },
   btnText: { color: colors.text, fontWeight: '600' },
   link: { color: colors.accent, fontWeight: '600' },
+  booked: { borderLeftWidth: 4, borderLeftColor: colors.accent, paddingLeft: 10, gap: 2 },
+  bookedDay: { color: colors.muted, fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
+  bookedTime: { color: colors.accent, fontSize: 18, fontWeight: '700' },
+  bookedItem: { color: colors.text, fontSize: 15, fontWeight: '600' },
   problem: { color: '#FF6961', fontWeight: '600' },
 });
