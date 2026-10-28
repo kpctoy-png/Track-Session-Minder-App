@@ -136,12 +136,13 @@ export function AnnouncementAdmin({
     // Event name on top and the club's name at the bottom, so drivers know who is texting from an unsaved number.
     const club = clubs.find((c) => c.id === event.clubId)?.name;
     if (texting) setTextBatch({ message: [event.name, announcementText(text), club ? `– ${club}` : ''].filter(Boolean).join('\n'), phones });
-    if (!emailing) return onSent(showing ? 'Announcement sent to drivers' : 'Ready to text');
+    const textNext = texting ? `tap Text ${plural(phones.length)} below to send the texts` : '';
+    if (!emailing) return onSent([showing ? 'Announcement sent to drivers' : '', textNext].filter(Boolean).join(' · '));
     const sent = showing ? 'Announcement sent to drivers · ' : '';
     onSent(`${sent}emailing…`);
     const mail = await emailRoster(event.id, announcementText(text), groups ?? undefined, emailRest);
     if (mail.error) setProblem(`${showing ? 'Shown in the app, but the' : 'The'} email didn't go out: ${mail.error}`);
-    else onSent(`${sent}emailed ${mail.emailed}`);
+    else onSent(`${sent}emailed ${mail.emailed}${textNext ? ` · ${textNext}` : ''}`);
   };
 
   const clear = async (id: string, eventId: string | null, createdAt: string) => {
@@ -354,8 +355,13 @@ export const TEXT_SHORTCUT = 'Text Drivers';
 function TextDrivers({ batch, onDone }: { batch: { message: string; phones: string[] }; onDone: () => void }) {
   const [opened, setOpened] = useState(false);
   const url = `shortcuts://run-shortcut?name=${encodeURIComponent(TEXT_SHORTCUT)}&input=text&text=${encodeURIComponent(JSON.stringify(batch))}`;
+  // The texts aren't sent until this button is tapped, so bring the card into view rather than leave it below the fold.
+  useEffect(() => {
+    if (typeof document !== 'undefined') document.getElementById('text-drivers')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
   return (
-    <View style={styles.confirm}>
+    <View style={[styles.confirm, styles.textCard]} nativeID="text-drivers">
+      <Text style={styles.textCardTitle}>{opened ? '📱 Texting…' : '📱 One more step: the texts are not sent yet'}</Text>
       <Text style={styles.confirmText}>
         {opened
           ? `The ${TEXT_SHORTCUT} shortcut is texting ${plural(batch.phones.length)}. Keep the Shortcuts app open until it finishes.`
@@ -459,6 +465,8 @@ const styles = StyleSheet.create({
   checkNote: { color: colors.muted, fontSize: 13, marginLeft: 28, marginTop: -2, marginBottom: 6 },
   minutes: { color: colors.text, fontSize: 16, fontWeight: '700', minWidth: 60, textAlign: 'center' },
   change: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  textCard: { backgroundColor: colors.cardRaised },
+  textCardTitle: { color: colors.accent, fontSize: 17, fontWeight: '700' },
   confirm: { borderWidth: 2, borderColor: colors.accent, borderRadius: 12, padding: 12, marginTop: 10, marginBottom: 10, gap: 10 },
   confirmText: { color: colors.text, fontSize: 15, fontWeight: '600' },
   problem: { color: '#FF6961', fontSize: 13, marginTop: 8 },
