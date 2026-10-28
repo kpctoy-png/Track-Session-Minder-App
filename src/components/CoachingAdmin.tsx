@@ -36,6 +36,8 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   const [busy, setBusy] = useState(false);
   // Removing sends the student and instructor an email and an alert, so it waits for a second tap.
   const [removing, setRemoving] = useState<string | null>(null);
+  // The driver whose Book button opened the form, so it shows under them.
+  const [bookingFrom, setBookingFrom] = useState<string | null>(null);
 
   useEffect(() => {
     setPaid([]);
@@ -59,6 +61,7 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   const suggested = runGroupFor(forGroup ?? undefined);
 
   const startBooking = (p: Paid) => {
+    setBookingFrom(p.email);
     setKind('coaching');
     setEmail(p.email);
     setForGroup(p.run_group);
@@ -109,7 +112,84 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
     setForGroup(null);
     setError(null);
     setAdding(false);
+    setBookingFrom(null);
   };
+
+  // Opened from a driver's Book button, the form shows under that driver; otherwise at the bottom.
+  const form = (
+          <View style={styles.form}>
+            <View style={styles.chips}>
+              {(['coaching', 'checkride'] as const).map((k) => (
+                <Pressable key={k} onPress={() => setKind(k)} style={[styles.chip, kind === k && styles.chipOn]}>
+                  <Text style={[styles.chipText, kind === k && styles.chipTextOn]}>{k === 'checkride' ? 'Check ride' : 'Coaching'}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              id="coach-student"
+              style={styles.input}
+              placeholder="Student's email"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
+            <TextInput
+              id="coach-name"
+              style={styles.input}
+              placeholder="Instructor's name"
+              placeholderTextColor={colors.muted}
+              value={coach}
+              onChangeText={setCoach}
+            />
+            <TextInput
+              id="coach-email"
+              style={styles.input}
+              placeholder="Instructor's email (optional, they get their own email)"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={coachEmail}
+              onChangeText={setCoachEmail}
+            />
+            <Text style={styles.label}>During which session?</Text>
+            {suggested ? <Text style={styles.paidSub}>★ marks {forGroup} sessions.</Text> : null}
+            <View style={styles.chips}>
+              {items.map((item) => (
+                <Pressable key={item.id} onPress={() => setItemId(item.id)} style={[styles.chip, itemId === item.id && styles.chipOn]}>
+                  <Text style={[styles.chipText, itemId === item.id && styles.chipTextOn]}>
+                    {suggested && item.groups?.includes(suggested) ? '★ ' : ''}
+                    {formatTime(item.start)} {item.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              id="coach-notes"
+              style={styles.input}
+              placeholder="Notes for the student (optional), like where to meet"
+              placeholderTextColor={colors.muted}
+              value={notes}
+              onChangeText={setNotes}
+            />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <View style={styles.actions}>
+              <Pressable onPress={save} style={[styles.btn, styles.btnPrimary]} disabled={busy}>
+                <Text style={[styles.btnText, styles.btnTextPrimary]}>{busy ? 'Saving…' : kind === 'checkride' ? 'Book check ride' : 'Book coaching'}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setAdding(false);
+                  setForGroup(null);
+                }}
+                style={styles.btn}
+              >
+                <Text style={styles.btnText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+  );
 
   return (
     <View>
@@ -124,7 +204,8 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
           </Text>
           <Text style={styles.paidSub}>From the registered drivers list. Booked counts every day of {event.name}.</Text>
           {needs.map((p) => (
-            <View key={p.email} style={styles.paidRow}>
+            <View key={p.email}>
+            <View style={styles.paidRow}>
               <View style={styles.rowBody}>
                 <Text style={styles.paidName}>{p.name || p.email}</Text>
                 <Text style={styles.rowSub}>
@@ -138,6 +219,8 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
               ) : (
                 <Text style={styles.done}>✓</Text>
               )}
+            </View>
+            {adding && bookingFrom === p.email ? form : null}
             </View>
           ))}
         </View>
@@ -186,83 +269,18 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
         </View>
       ))}
 
-      {adding ? (
-        <View style={styles.form}>
-          <View style={styles.chips}>
-            {(['coaching', 'checkride'] as const).map((k) => (
-              <Pressable key={k} onPress={() => setKind(k)} style={[styles.chip, kind === k && styles.chipOn]}>
-                <Text style={[styles.chipText, kind === k && styles.chipTextOn]}>{k === 'checkride' ? 'Check ride' : 'Coaching'}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <TextInput
-            id="coach-student"
-            style={styles.input}
-            placeholder="Student's email"
-            placeholderTextColor={colors.muted}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TextInput
-            id="coach-name"
-            style={styles.input}
-            placeholder="Instructor's name"
-            placeholderTextColor={colors.muted}
-            value={coach}
-            onChangeText={setCoach}
-          />
-          <TextInput
-            id="coach-email"
-            style={styles.input}
-            placeholder="Instructor's email (optional, they get their own email)"
-            placeholderTextColor={colors.muted}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={coachEmail}
-            onChangeText={setCoachEmail}
-          />
-          <Text style={styles.label}>During which session?</Text>
-          {suggested ? <Text style={styles.paidSub}>★ marks {forGroup} sessions.</Text> : null}
-          <View style={styles.chips}>
-            {items.map((item) => (
-              <Pressable key={item.id} onPress={() => setItemId(item.id)} style={[styles.chip, itemId === item.id && styles.chipOn]}>
-                <Text style={[styles.chipText, itemId === item.id && styles.chipTextOn]}>
-                  {suggested && item.groups?.includes(suggested) ? '★ ' : ''}
-                  {formatTime(item.start)} {item.title}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <TextInput
-            id="coach-notes"
-            style={styles.input}
-            placeholder="Notes for the student (optional), like where to meet"
-            placeholderTextColor={colors.muted}
-            value={notes}
-            onChangeText={setNotes}
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <View style={styles.actions}>
-            <Pressable onPress={save} style={[styles.btn, styles.btnPrimary]} disabled={busy}>
-              <Text style={[styles.btnText, styles.btnTextPrimary]}>{busy ? 'Saving…' : kind === 'checkride' ? 'Book check ride' : 'Book coaching'}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setAdding(false);
-                setForGroup(null);
-              }}
-              style={styles.btn}
-            >
-              <Text style={styles.btnText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : (
+      {adding && !bookingFrom ? (
+        form
+      ) : adding ? null : (
         <>
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Pressable onPress={() => setAdding(true)} style={[styles.btn, styles.btnPrimary, styles.addBtn]}>
+          <Pressable
+            onPress={() => {
+              setBookingFrom(null);
+              setAdding(true);
+            }}
+            style={[styles.btn, styles.btnPrimary, styles.addBtn]}
+          >
             <Text style={[styles.btnText, styles.btnTextPrimary]}>+ Book coaching or check ride</Text>
           </Pressable>
         </>
