@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 
 import { useSchedule } from '@/lib/ScheduleStore';
 import { rosterFromCsv, rosterFromTable, type RosterRow } from '@/lib/roster';
+import { fetchSheetTab, sheetGidFromLink, sheetIdFromLink } from '@/lib/sheetImport';
 import { supabase } from '@/lib/supabase';
 import { isZip, readXlsx } from '@/lib/xlsx';
 import { colors } from './theme';
@@ -18,6 +19,8 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
   const [removing, setRemoving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [sheetLink, setSheetLink] = useState('');
+  const [fetching, setFetching] = useState(false);
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -55,6 +58,25 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
     input.click();
   };
 
+  const fromSheet = async () => {
+    const id = sheetIdFromLink(sheetLink);
+    if (!id) return setError('That doesn\'t look like a Google Sheet link. Copy it from the address bar of the sheet.');
+    setError(null);
+    setFetching(true);
+    let read: ReturnType<typeof rosterFromCsv>;
+    try {
+      read = rosterFromTable(await fetchSheetTab(id, { gid: sheetGidFromLink(sheetLink) }));
+    } catch {
+      read = {
+        rows: [],
+        problem: "Couldn't open that sheet. In Google Sheets tap Share, set General access to Anyone with the link (Viewer), then try again.",
+      };
+    }
+    setFetching(false);
+    setError(read.problem ?? null);
+    setUpload(read.problem ? null : { file: 'the Google Sheet', rows: read.rows });
+  };
+
   const save = async () => {
     if (!supabase || !upload) return;
     setBusy(true);
@@ -84,7 +106,7 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
       <Text style={styles.sub}>
         Upload the participant list so announcements can be emailed to everyone at {eventName}, including drivers who
         haven't opened the app. In ClubReg: This Event → Reports → Report Builder, tick Email, Export, and upload the
-        file it saves (a CSV or Excel sheet works too). Cancelled entries are skipped. Only organizers see this
+        file it saves (a CSV or Excel file, or a Google Sheet link, works too). Cancelled entries are skipped. Only organizers see this
         list, and it's deleted a week after the event.
       </Text>
       {Platform.OS === 'web' ? (
@@ -92,6 +114,24 @@ export function RosterAdmin({ eventId, eventName, onChange }: { eventId: string;
           <Text style={styles.btnText}>{rows?.length ? 'Upload a new list' : 'Upload participant list'}</Text>
         </Pressable>
       ) : null}
+      <Text style={styles.sub}>Or paste a Google Sheet link (the tab the link opens on is read):</Text>
+      <View style={styles.sheetRow}>
+        <TextInput
+          value={sheetLink}
+          onChangeText={setSheetLink}
+          placeholder="https://docs.google.com/spreadsheets/d/…"
+          placeholderTextColor={colors.muted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={styles.sheetInput}
+        />
+        <Pressable onPress={() => !fetching && sheetLink.trim() && fromSheet()} style={styles.small}>
+          <Text style={styles.smallText}>{fetching ? 'Reading…' : 'Read sheet'}</Text>
+        </Pressable>
+      </View>
+      <Text style={[styles.detail, styles.sheetNote]}>
+        The sheet must be shared as Anyone with the link (Viewer). You can turn sharing back off after you save the list.
+      </Text>
       <ClubRegLink eventId={eventId} />
       {upload ? (
         <View style={styles.confirm}>
@@ -277,6 +317,18 @@ function shownPulls(pulls: Pull[]): Pull[] {
 const paidFor = (rows: RosterRow[]) => rows.filter((r) => r.coaching).length;
 
 const styles = StyleSheet.create({
+  sheetNote: { marginTop: 6, marginBottom: 10 },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  sheetInput: {
+    flex: 1,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+  },
   sub: { color: colors.muted, fontSize: 13, marginTop: 2, marginBottom: 10 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   summary: { color: colors.text, fontSize: 16, fontWeight: '600' },

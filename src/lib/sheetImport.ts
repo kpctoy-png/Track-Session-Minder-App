@@ -123,9 +123,15 @@ export function sheetIdFromLink(link: string): string | null {
   return /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/.exec(link)?.[1] ?? null;
 }
 
-/** Downloads one tab of a sheet shared as "Anyone with the link can view". */
-export async function fetchSheetTab(sheetId: string, tab: string): Promise<string[][]> {
-  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(tab)}`;
+/** "...#gid=123" or "...?gid=123" -> "123", the tab the link points at. */
+export function sheetGidFromLink(link: string): string | null {
+  return /[#?&]gid=(\d+)/.exec(link)?.[1] ?? null;
+}
+
+/** Downloads one tab of a sheet shared as "Anyone with the link can view": by name, by gid, or the first tab. */
+export async function fetchSheetTab(sheetId: string, tab: string | { gid: string | null }): Promise<string[][]> {
+  const which = typeof tab === 'string' ? `&sheet=${encodeURIComponent(tab)}` : tab.gid ? `&gid=${tab.gid}` : '';
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&headers=0${which}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Google Sheets answered ${response.status}`);
   const text = await response.text();
