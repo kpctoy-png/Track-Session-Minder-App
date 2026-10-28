@@ -19,6 +19,8 @@ export function ManageOrganizers() {
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const club = clubId ?? (clubs.length === 1 ? clubs[0].id : null);
+  const [clubForm, setClubForm] = useState<{ name: string; website: string; logo: string } | null>(null);
+  const [clubError, setClubError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -58,10 +60,90 @@ export function ManageOrganizers() {
     else load();
   };
 
+  const addClub = async () => {
+    if (!supabase || !clubForm) return;
+    const name = clubForm.name.trim();
+    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const link = (raw: string) => (raw.trim() && !/^https?:\/\//i.test(raw.trim()) ? `https://${raw.trim()}` : raw.trim()) || null;
+    if (!id) return setClubError('Enter the organization’s name.');
+    if (clubs.some((c) => c.id === id || c.name.toLowerCase() === name.toLowerCase())) return setClubError(`${name} is already here.`);
+    setBusy(true);
+    setClubError(null);
+    const { error } = await supabase.from('clubs').insert({ id, name, website: link(clubForm.website), logo_url: link(clubForm.logo) });
+    setBusy(false);
+    if (error) return setClubError(`Couldn't add it: ${error.message}`);
+    setClubForm(null);
+    setClubId(id);
+  };
+
   const clubName = (id: string) => clubs.find((c) => c.id === id)?.name ?? id;
+
+  const closeClubForm = () => {
+    setClubForm(null);
+    setClubError(null);
+  };
 
   return (
     <View>
+      <Text style={styles.label}>Organizations</Text>
+      <Text style={styles.sub}>
+        Each organization only sees and changes its own events, driver lists, coaching and sign-ups. Only Redline sees
+        them all.
+      </Text>
+      <View style={styles.chips}>
+        {clubs.map((c) => (
+          <View key={c.id} style={styles.chip}>
+            <Text style={styles.chipText}>{c.name}</Text>
+          </View>
+        ))}
+      </View>
+      {clubForm ? (
+        <View>
+          <TextInput
+            id="club-name"
+            style={styles.input}
+            placeholder="Organization name"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="words"
+            value={clubForm.name}
+            onChangeText={(name) => setClubForm({ ...clubForm, name })}
+          />
+          <TextInput
+            id="club-website"
+            style={styles.input}
+            placeholder="Website (optional)"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="none"
+            keyboardType="url"
+            value={clubForm.website}
+            onChangeText={(website) => setClubForm({ ...clubForm, website })}
+          />
+          <TextInput
+            id="club-logo"
+            style={styles.input}
+            placeholder="Logo image link (optional, otherwise the name shows)"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="none"
+            keyboardType="url"
+            value={clubForm.logo}
+            onChangeText={(logo) => setClubForm({ ...clubForm, logo })}
+          />
+          {clubError ? <Text style={styles.error}>{clubError}</Text> : null}
+          <View style={styles.btnRow}>
+            <Pressable onPress={addClub} style={[styles.btn, styles.btnPrimary]}>
+              <Text style={[styles.btnText, styles.btnTextPrimary]}>{busy ? 'Adding…' : 'Add organization'}</Text>
+            </Pressable>
+            <Pressable onPress={closeClubForm} style={styles.btn}>
+              <Text style={styles.btnText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <Pressable onPress={() => setClubForm({ name: '', website: '', logo: '' })} style={[styles.btn, styles.btnAlone]}>
+          <Text style={styles.btnText}>+ Add organization</Text>
+        </Pressable>
+      )}
+      <Text style={[styles.label, styles.labelGap]}>Organizers</Text>
       <Text style={styles.sub}>
         Organizers can change their club's events. Add their email here, then send them the admin link. They sign in
         with a code we email them, no password needed.
@@ -128,6 +210,10 @@ export function ManageOrganizers() {
 }
 
 const styles = StyleSheet.create({
+  label: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  labelGap: { marginTop: 20 },
+  btnRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
+  btnAlone: { alignSelf: 'flex-start' },
   heading: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 24 },
   sub: { color: colors.muted, fontSize: 13, marginTop: 2, marginBottom: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: 12, padding: 12, marginBottom: 8 },

@@ -1,5 +1,8 @@
 import { Link } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import type { TrackEvent } from '@/data/types';
 
 import { shortDate } from '@/lib/dates';
 import { useSchedule } from '@/lib/ScheduleStore';
@@ -14,22 +17,54 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
   );
 }
 
-export function EventPicker() {
-  const { clubs, event, day, selectDay } = useSchedule();
+/**
+ * The chosen event and its days. Given `only`, Change lists just those events here (an organizer's own) instead of
+ * opening the full events page.
+ */
+export function EventPicker({ only }: { only?: TrackEvent[] }) {
+  const { clubs, event, day, selectDay, selectEvent } = useSchedule();
+  const [choosing, setChoosing] = useState(false);
+  const header = (
+    <>
+      <ClubLogo club={clubs.find((c) => c.id === event.clubId)} height={36} />
+      <View style={styles.eventText}>
+        <Text style={styles.eventName}>{event.name}</Text>
+        <Text style={styles.eventTrack}>
+          {event.track} · {event.location}
+        </Text>
+      </View>
+    </>
+  );
   return (
     <View style={styles.wrap}>
-      <Link href="/events" asChild>
-        <Pressable style={styles.event}>
-          <ClubLogo club={clubs.find((c) => c.id === event.clubId)} height={36} />
-          <View style={styles.eventText}>
-            <Text style={styles.eventName}>{event.name}</Text>
-            <Text style={styles.eventTrack}>
-              {event.track} · {event.location}
-            </Text>
-          </View>
-          <Text style={styles.change}>Change</Text>
+      {!only ? (
+        <Link href="/events" asChild>
+          <Pressable style={styles.event}>
+            {header}
+            <Text style={styles.change}>Change</Text>
+          </Pressable>
+        </Link>
+      ) : (
+        <Pressable style={styles.event} onPress={() => setChoosing(!choosing)} disabled={only.length < 2}>
+          {header}
+          {only.length > 1 ? <Text style={styles.change}>{choosing ? 'Close' : 'Change'}</Text> : null}
         </Pressable>
-      </Link>
+      )}
+      {only && choosing ? (
+        <View style={styles.row}>
+          {only.map((e) => (
+            <Chip
+              key={e.id}
+              label={`${e.name} · ${shortDate(e.days[0]?.date ?? '')}`}
+              selected={e.id === event.id}
+              onPress={() => {
+                selectEvent(e.id);
+                setChoosing(false);
+              }}
+            />
+          ))}
+        </View>
+      ) : null}
       <View style={styles.row}>
         {event.days.map((d) => (
           <Chip
