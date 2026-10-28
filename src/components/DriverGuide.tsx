@@ -28,7 +28,7 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
       <Section title="Pick your event">
         <Body>
           The event's name is at the top of every screen. Tap Change, or open the Events tab, and tap your weekend. On
-          multi-day events, tap the day at the top (for example Friday or Saturday) to switch days.
+          multi-day events, tap the day at the top (for example Friday or Saturday) to switch days. The event and day stay pinned at the top of Now and Schedule while you scroll.
         </Body>
       </Section>
 
@@ -45,7 +45,7 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
       <Section title="Urgent announcements">
         <Body>
           If the organizers need everyone to know something right away (lightning, a red flag, a track closure), a red
-          message appears at the top of every tab. The icon in front tells you what it's about at a glance (⚡ lightning,
+          message stays pinned at the top of every tab, even while you scroll. The icon in front tells you what it's about at a glance (⚡ lightning,
           🚑 medical, 🚩 red flag, 🌧️ weather, 🛢️ Speedy Dry, 🔥 fire, ⚠️ caution, 🏁 track open). Phones with alerts on get it as an alert too, and the organizers may also email it to everyone registered for the
           event. It goes away when the
           organizers clear it, and any schedule change that follows shows up as usual.

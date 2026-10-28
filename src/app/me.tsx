@@ -1,8 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { AnnouncementBanner } from '@/components/AnnouncementBanner';
+import { DriverScroll } from '@/components/AnnouncementBanner';
 import { AlertsCard } from '@/components/AlertsCard';
 import { CoachingRequestCard } from '@/components/CoachingRequestCard';
 import { DriverGuide } from '@/components/DriverGuide';
@@ -49,8 +49,7 @@ export default function MeScreen() {
   );
   if (supabase && !myEmail)
     return (
-      <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <AnnouncementBanner />
+      <DriverScroll contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <AlertsCard placement="top" />
         {topButtons}
         <EmailCodeSignIn
@@ -59,14 +58,14 @@ export default function MeScreen() {
           emailHint="Enter the email you used to sign up for the event."
           idPrefix="me"
         />
-      </ScrollView>
+      </DriverScroll>
     );
   if (!supabase && !myEmail)
     return (
-      <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+      <DriverScroll contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         {topButtons}
         <PracticeSignIn onSubmit={setPracticeEmail} />
-      </ScrollView>
+      </DriverScroll>
     );
 
   // Bookings that have ended drop off: earlier days entirely, and today's once their end time passes
@@ -87,8 +86,7 @@ export default function MeScreen() {
   const doneToday = all.filter((b) => ended(b) && b.day.date === today);
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
-      <AnnouncementBanner />
+    <DriverScroll contentContainerStyle={styles.page}>
       <View style={styles.signedIn}>
         <Text style={styles.signedInText}>Signed in as {myEmail}</Text>
         <Btn label="Sign out" onPress={() => (supabase ? supabase.auth.signOut() : setPracticeEmail(null))} />
@@ -134,7 +132,7 @@ export default function MeScreen() {
         </Pressable>
       ) : null}
       {myEmail ? <CoachingRequestCard email={myEmail.toLowerCase()} /> : null}
-    </ScrollView>
+    </DriverScroll>
   );
 }
 

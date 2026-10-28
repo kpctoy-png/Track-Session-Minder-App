@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AnnouncementBanner } from '@/components/AnnouncementBanner';
+import { DriverScroll } from '@/components/AnnouncementBanner';
 import { AlertsCard } from '@/components/AlertsCard';
 import { ClubLogo, hasClubLogo } from '@/components/ClubLogo';
 import { JoinListCard } from '@/components/JoinListCard';
@@ -50,9 +50,7 @@ export default function NowScreen() {
         .sort((a, b) => (a.day.date + a.start).localeCompare(b.day.date + b.start))[0];
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
-      <AnnouncementBanner />
-      <EventPicker />
+    <DriverScroll header={<EventPicker />} contentContainerStyle={styles.page}>
       {showLive ? <PreviewClock /> : null}
       {clock.isPreview && previewing ? (
         <Pressable onPress={() => setPreviewing(false)}>
@@ -132,7 +130,7 @@ export default function NowScreen() {
 
       <AlertsCard placement="bottom" />
       <JoinListCard />
-    </ScrollView>
+    </DriverScroll>
   );
 }
 
