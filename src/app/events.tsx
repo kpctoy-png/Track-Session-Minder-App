@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AnnouncementBanner } from '@/components/AnnouncementBanner';
+import { DriverScroll } from '@/components/AnnouncementBanner';
 import { ClubLogo } from '@/components/ClubLogo';
 import { colors } from '@/components/theme';
 import type { Club, TrackEvent } from '@/data/types';
@@ -27,8 +27,7 @@ export default function EventsScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
-      <AnnouncementBanner />
+    <DriverScroll contentContainerStyle={styles.page}>
       {clubs.length > 1 ? (
         <View style={styles.filters}>
           <Filter label="All clubs" selected={clubFilter === null} onPress={() => setClubFilter(null)} />
@@ -49,7 +48,7 @@ export default function EventsScreen() {
       {past.map((e) => (
         <EventCard key={e.id} event={e} club={clubById(e.clubId)} today={today} selected={e.id === selected.id} onPress={() => open(e.id)} past />
       ))}
-    </ScrollView>
+    </DriverScroll>
   );
 }
 
