@@ -14,7 +14,10 @@ type Request = { id: string; note: string | null; status: 'open' | 'booked' | 'd
  * first, and then sees whether it's waiting, booked or full.
  */
 export function CoachingRequestCard({ email }: { email: string }) {
-  const { event } = useSchedule();
+  const { event, coaching } = useSchedule();
+  // A booking for this driver arrives live; it's the moment their request turns booked, so look again then.
+  const eventDays = new Set(event.days.map((d) => d.id));
+  const myBookings = coaching.filter((c) => c.studentEmail === email && c.kind !== 'checkride' && eventDays.has(c.dayId)).length;
   const [request, setRequest] = useState<Request | null>(null);
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState('');
@@ -22,7 +25,6 @@ export function CoachingRequestCard({ email }: { email: string }) {
   const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
-    setRequest(null);
     setAsking(false);
     setProblem(null);
     supabase
@@ -33,7 +35,7 @@ export function CoachingRequestCard({ email }: { email: string }) {
       .order('created_at', { ascending: false })
       .limit(1)
       .then(({ data }) => setRequest((data?.[0] as Request | undefined) ?? null));
-  }, [event.id, email]);
+  }, [event.id, email, myBookings]);
 
   const last = event.days.map((d) => d.date).sort().pop();
   if (!supabase || !last || last < todayISO(new Date())) return null;
@@ -65,11 +67,12 @@ export function CoachingRequestCard({ email }: { email: string }) {
     return (
       <View style={styles.card}>
         <Text style={styles.title}>Coaching at {event.name}</Text>
+        {/* Accepted and then a session booked counts as booked, even before the request itself is marked. */}
         <Text style={styles.sub}>
-          {request.status === 'booked'
+          {request.status === 'booked' || (request.paid && myBookings > 0)
             ? 'Booked. Your session shows above, and you got an email.'
             : request.paid
-            ? "Accepted and paid. Your session will show here once it's scheduled."
+            ? "Accepted and paid. Your session will show above once it's scheduled."
             : "Requested. See us at registration. We'll check for an open spot before you pay."}
           {request.note ? `\nYour note: ${request.note}` : ''}
         </Text>
