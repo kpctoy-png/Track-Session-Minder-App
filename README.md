@@ -50,8 +50,9 @@ entered). A session is linked to a
 schedule item, so "running late" shifts move it too.
 
 Signed-in drivers can also ask for coaching from My Day (Request coaching). The card shows
-the club's price and how to pay (`COACHING_OFFER` in `src/lib/coaching.ts`) and that it's
-subject to availability. Requests (`coaching_requests`) alert and email the club's organizers
+the club's price (`COACHING_OFFER` in `src/lib/coaching.ts`, `COACHING_PRICE` in `push-schedule`), paid at
+the event's registration since ClubReg takes no payments once the event starts, and that it's
+subject to availability. Once booked, drivers who hadn't paid in ClubReg get a "pay at registration" email. Requests (`coaching_requests`) alert and email the club's organizers
 through `push-schedule` (`coaching-request` action, from a trigger) and show at the top of
 Admin → Coaching. **Book** fills in the form and marks the request booked once saved;
 **Decline** (asks first) tells the driver by email and alert that coaching is full.

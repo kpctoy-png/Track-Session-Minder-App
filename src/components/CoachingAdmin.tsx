@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { BookingKind } from '@/data/types';
-import { bookingName, coachingTimes, findClash, isEmail } from '@/lib/coaching';
+import { bookingName, COACHING_OFFER, coachingTimes, findClash, isEmail } from '@/lib/coaching';
 import { runGroupFor } from '@/lib/roster';
 import { formatRange, formatTime, sortItems } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
@@ -234,7 +234,10 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
       {requests.length ? (
         <View style={styles.paid}>
           <Text style={styles.label}>Coaching requests: {requests.length}</Text>
-          <Text style={styles.paidSub}>Drivers who asked from the app. Book fills in their email; Decline tells them it's full.</Text>
+          <Text style={styles.paidSub}>
+            Drivers who asked from the app. They pay at registration unless they already paid in ClubReg. Book
+            fills in their email; Decline tells them it's full.
+          </Text>
           {requests.map((r) => {
             const reg = paid.find((p) => p.email === r.email);
             return (
@@ -243,7 +246,7 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
                   <View style={styles.rowBody}>
                     <Text style={styles.paidName}>{reg?.name || r.email}</Text>
                     <Text style={styles.rowSub}>
-                      {[reg ? `paid for ${reg.coaching} in ClubReg` : 'not paid in ClubReg yet', r.note].filter(Boolean).join(' · ')}
+                      {[reg ? `paid for ${reg.coaching} in ClubReg` : `collect ${COACHING_OFFER[event.clubId]?.amount ?? 'payment'} at registration`, r.note].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                   <Pressable
