@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AppState, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import type { BookingKind } from '@/data/types';
+import { RUN_GROUPS } from '@/data/runGroups';
+import type { BookingKind, RunGroupId } from '@/data/types';
 import { bookingName, COACHING_OFFER, coachingTimes, findClash, isEmail } from '@/lib/coaching';
 import { runGroupFor } from '@/lib/roster';
 import { todayISO } from '@/lib/dates';
@@ -35,6 +36,8 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   const { clubs, event, day, coaching, addCoaching, removeCoaching } = useSchedule();
   const [paid, setPaid] = useState<Paid[]>([]);
   const [forGroup, setForGroup] = useState<string | null>(null);
+  // A run group the organizer picked instead of the driver's own ('all' shows every session).
+  const [pickGroup, setPickGroup] = useState<RunGroupId | 'all' | null>(null);
   const [adding, setAdding] = useState(false);
   const [kind, setKind] = useState<BookingKind>('coaching');
   const [showFinished, setShowFinished] = useState(false);
@@ -61,18 +64,23 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   const [instructors, setInstructors] = useState<{ name: string; email: string }[]>([]);
   // Registered drivers' cell numbers by email, for the Text buttons.
   const [cells, setCells] = useState<Map<string, string>>(new Map());
+  // Registered drivers' ClubReg run groups by email, so the session list starts at the student's own group.
+  const [groups, setGroups] = useState<Map<string, string>>(new Map());
   const club = clubs.find((c) => c.id === event.clubId)?.name;
   /** A text in the same shape as announcement texts: event name, message, club sign-off. */
   const textBody = (message: string) => [event.name, message, club ? `– ${club}` : ''].filter(Boolean).join('\n');
 
   useEffect(() => {
     setCells(new Map());
+    setGroups(new Map());
     supabase
       ?.from('event_roster')
-      .select('email, phone')
+      .select('email, phone, run_group')
       .eq('event_id', event.id)
-      .not('phone', 'is', null)
-      .then(({ data }) => setCells(new Map((data ?? []).filter((r) => r.phone).map((r) => [String(r.email).toLowerCase(), String(r.phone)]))));
+      .then(({ data }) => {
+        setCells(new Map((data ?? []).filter((r) => r.phone).map((r) => [String(r.email).toLowerCase(), String(r.phone)])));
+        setGroups(new Map((data ?? []).filter((r) => r.run_group).map((r) => [String(r.email).toLowerCase(), String(r.run_group)])));
+      });
   }, [event.id, rosterVersion]);
 
   useEffect(() => {
@@ -152,7 +160,6 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
     .map((p) => ({ ...p, booked: bookedFor(p.email) }))
     .sort((a, b) => Number(a.booked >= a.coaching) - Number(b.booked >= b.coaching) || a.name.localeCompare(b.name));
   const waiting = needs.filter((p) => p.booked < p.coaching).length;
-  const suggested = runGroupFor(forGroup ?? undefined);
 
   const startBooking = (p: Paid, request?: string) => {
     setBookingFrom(request ? `request:${request}` : `paid:${p.email}`);
@@ -160,6 +167,7 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
     setKind('coaching');
     setEmail(p.email);
     setForGroup(p.run_group);
+    setPickGroup(null);
     setItemId(null);
     setError(null);
     setAdding(true);
@@ -175,7 +183,18 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   const isOver = (end: string) => day.date < today || (day.date === today && toMinutes(end) <= now.getHours() * 60 + now.getMinutes());
   const booked = all.filter((b) => !isOver(b.end));
   const finished = all.filter((b) => isOver(b.end));
-  const items = sortItems(day.items);
+  // Sessions that have already started can't be booked.
+  const items = sortItems(day.items).filter((i) => !isOver(i.start));
+  // Sessions start filtered to the student's ClubReg run group; the organizer can pick another group or all.
+  const ownGroup = runGroupFor(forGroup ?? groups.get(email.trim().toLowerCase()));
+  const group = pickGroup === 'all' ? undefined : (pickGroup ?? ownGroup);
+  const dayGroups = (Object.keys(RUN_GROUPS) as RunGroupId[]).filter((g) => items.some((i) => i.groups?.includes(g)));
+  const groupItems = group ? items.filter((i) => i.groups?.includes(group)) : items;
+  const shownItems = groupItems.length ? groupItems : items;
+  const choose = (g: RunGroupId | 'all') => {
+    setPickGroup(g === ownGroup ? null : g);
+    setItemId(null);
+  };
 
   const save = async () => {
     const item = items.find((i) => i.id === itemId);
@@ -218,6 +237,7 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
     setNotes('');
     setItemId(null);
     setForGroup(null);
+    setPickGroup(null);
     setError(null);
     setAdding(false);
     setBookingFrom(null);
@@ -282,12 +302,35 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
               onChangeText={setCoachEmail}
             />
             <Text style={styles.label}>During which session?</Text>
-            {suggested ? <Text style={styles.paidSub}>★ marks {forGroup} sessions.</Text> : null}
+            {dayGroups.length ? (
+              <>
+                <Text style={styles.paidSub}>
+                  {group
+                    ? `Showing ${RUN_GROUPS[group].name} sessions${group === ownGroup ? ' (their run group in ClubReg)' : ''}. Tap a group to change.`
+                    : ownGroup
+                      ? `Showing every session. Their run group in ClubReg is ${RUN_GROUPS[ownGroup].name}.`
+                      : 'Showing every session. Tap a group to narrow the list.'}
+                </Text>
+                <View style={styles.chips}>
+                  {[...dayGroups, 'all' as const].map((g) => {
+                    const on = g === 'all' ? !group : group === g;
+                    return (
+                      <Pressable key={g} accessibilityLabel={`Show ${g === 'all' ? 'all' : RUN_GROUPS[g].name} sessions`} onPress={() => choose(g)} style={[styles.chip, styles.groupChip, on && styles.groupChipOn]}>
+                        <Text style={[styles.chipText, on && styles.groupChipTextOn]}>
+                          {g === 'all' ? 'All' : RUN_GROUPS[g].short}
+                          {g === ownGroup ? ' ✓' : ''}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
+            {items.length ? null : <Text style={styles.paidSub}>Every session on {day.label} has already started. Pick a later day to book.</Text>}
             <View style={styles.chips}>
-              {items.map((item) => (
+              {shownItems.map((item) => (
                 <Pressable key={item.id} onPress={() => setItemId(item.id)} style={[styles.chip, itemId === item.id && styles.chipOn]}>
                   <Text style={[styles.chipText, itemId === item.id && styles.chipTextOn]}>
-                    {suggested && item.groups?.includes(suggested) ? '★ ' : ''}
                     {formatTime(item.start)} {item.title}
                   </Text>
                 </Pressable>
@@ -314,6 +357,7 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
                 onPress={() => {
                   setAdding(false);
                   setForGroup(null);
+                  setPickGroup(null);
                   setBookingFrom(null);
                   setForRequest(null);
                 }}
@@ -588,6 +632,9 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { color: colors.text, fontSize: 13 },
   chipTextOn: { color: '#000', fontWeight: '700' },
+  groupChip: { borderRadius: 16 },
+  groupChipOn: { borderColor: colors.accent, borderWidth: 2 },
+  groupChipTextOn: { color: colors.accent, fontWeight: '700' },
   error: { color: '#FF6961', fontSize: 13, marginBottom: 8 },
   actions: { flexDirection: 'row', gap: 8 },
   btn: { backgroundColor: colors.cardRaised, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: colors.border },
