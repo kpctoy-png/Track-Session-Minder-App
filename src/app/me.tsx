@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { DriverScroll } from '@/components/AnnouncementBanner';
 import { AlertsCard } from '@/components/AlertsCard';
@@ -12,12 +12,15 @@ import { FeedbackForm } from '@/components/FeedbackForm';
 import { colors } from '@/components/theme';
 import { bookingName, coachingTimes, coachingTitle, isCoachOf, isEmail, sessionsFor } from '@/lib/coaching';
 import { shortDate, todayISO } from '@/lib/dates';
+import { useOnRoster } from '@/lib/registration';
 import { formatRange, toMinutes } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { supabase } from '@/lib/supabase';
 
 export default function MeScreen() {
-  const { events, coaching, myEmail, setPracticeEmail, selectEvent, selectDay } = useSchedule();
+  const { clubs, event, events, coaching, myEmail, setPracticeEmail, selectEvent, selectDay } = useSchedule();
+  const onRoster = useOnRoster(event.id, supabase ? myEmail : null);
+  const website = clubs.find((c) => c.id === event.clubId)?.website;
   const router = useRouter();
   // A link ending in /me?guide=1 (used in invite emails) opens the guide directly.
   const { guide } = useLocalSearchParams<{ guide?: string }>();
@@ -93,6 +96,27 @@ export default function MeScreen() {
         <Text style={styles.signedInText}>Signed in as {myEmail}</Text>
         <Btn label="Sign out" onPress={() => (supabase ? supabase.auth.signOut() : setPracticeEmail(null))} />
       </View>
+      {!onRoster && (event.days.map((d) => d.date).sort().pop() ?? '') >= today ? (
+        <View style={styles.viewOnly}>
+          <Text style={styles.viewOnlyTitle}>👀 Spectator mode</Text>
+          <Text style={styles.viewOnlyText}>
+            Enjoy the schedule! Driver tools are for registered drivers, and {myEmail} isn't on the {event.name} driver
+            list.
+          </Text>
+          {website ? (
+            <Text style={styles.viewOnlyText}>
+              Want to drive? Register at{' '}
+              <Text style={styles.viewOnlyLink} onPress={() => Linking.openURL(website)}>
+                {website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+              </Text>
+              .
+            </Text>
+          ) : null}
+          <Text style={styles.viewOnlyText}>
+            Already registered? Sign out and sign in again with the email you used on ClubReg.
+          </Text>
+        </View>
+      ) : null}
       {mine.length ? null : <AlertsCard placement="top" />}
       {topButtons}
 
@@ -178,6 +202,10 @@ const styles = StyleSheet.create({
   feedbackText: { color: colors.text, fontSize: 16, fontWeight: '600' },
   heading: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: 8 },
   sub: { color: colors.muted, fontSize: 13, marginTop: 2, marginBottom: 10 },
+  viewOnly: { backgroundColor: '#2A2410', borderRadius: 12, borderWidth: 1, borderColor: '#B8962E', padding: 12, marginBottom: 12, gap: 4 },
+  viewOnlyTitle: { color: '#F2D27A', fontSize: 15, fontWeight: '700' },
+  viewOnlyText: { color: colors.text, fontSize: 14 },
+  viewOnlyLink: { color: '#F2D27A', fontWeight: '700', textDecorationLine: 'underline' },
   signedIn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#10261A', borderRadius: 12, padding: 12, marginBottom: 12 },
   signedInText: { color: '#34C759', fontSize: 13, flex: 1 },
   input: { backgroundColor: colors.card, color: colors.text, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: 12, fontSize: 16, marginBottom: 10 },

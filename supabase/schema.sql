@@ -544,10 +544,19 @@ create or replace function my_run_group(for_event text) returns text
   where event_id = for_event and lower(email) = lower(auth.jwt() ->> 'email') limit 1;
 $$;
 grant execute on function my_run_group(text) to authenticated;
+-- Whether the signed-in driver is on an event's registered drivers list. Track staff and guests aren't, so they
+-- can follow the schedule but not request coaching. Before the first ClubReg pull (no list yet) everyone counts.
+create or replace function on_event_roster(for_event text) returns boolean
+  language sql stable security definer set search_path = public as $$
+  select exists (select 1 from event_roster where event_id = for_event and lower(email) = lower(auth.jwt() ->> 'email'))
+      or not exists (select 1 from event_roster where event_id = for_event);
+$$;
+grant execute on function on_event_roster(text) to authenticated;
 drop policy if exists "Drivers ask for coaching" on coaching_requests;
 create policy "Drivers ask for coaching" on coaching_requests for insert to authenticated
   with check (email = lower(auth.jwt() ->> 'email') and status = 'open' and not paid
-              and coalesce(my_run_group(event_id), '') not ilike '%novice%instructor%');
+              and coalesce(my_run_group(event_id), '') not ilike '%novice%instructor%'
+              and on_event_roster(event_id));
 drop policy if exists "Organizers answer requests" on coaching_requests;
 create policy "Organizers answer requests" on coaching_requests for update to authenticated
   using (can_announce(event_id)) with check (can_announce(event_id));
