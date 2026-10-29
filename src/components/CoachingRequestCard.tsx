@@ -31,6 +31,15 @@ export function CoachingRequestCard({ email }: { email: string }) {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // Novice drivers ride with an assigned instructor, so paid coaching isn't offered to them.
+  const [novice, setNovice] = useState(false);
+
+  useEffect(() => {
+    setNovice(false);
+    supabase
+      ?.rpc('my_run_group', { for_event: event.id })
+      .then(({ data }) => setNovice(typeof data === 'string' && /novice/i.test(data)));
+  }, [event.id, email]);
 
   useEffect(() => {
     setAsking(false);
@@ -47,6 +56,16 @@ export function CoachingRequestCard({ email }: { email: string }) {
 
   const last = event.days.map((d) => d.date).sort().pop();
   if (!supabase || !last || last < todayISO(new Date())) return null;
+  if (novice && !request && !myBookings)
+    return (
+      <View style={styles.card}>
+        <Text style={styles.title}>Coaching at {event.name}</Text>
+        <Text style={styles.sub}>
+          You're in Novice, so you already ride with an assigned instructor all weekend. Coaching requests open once you
+          move up.
+        </Text>
+      </View>
+    );
   const offer = COACHING_OFFER[event.clubId];
   const terms = `Coaching is ${offer ? offer.price : 'paid per session'}, subject to availability.${offer ? ` ${offer.pay}` : ''}`;
 
@@ -58,7 +77,10 @@ export function CoachingRequestCard({ email }: { email: string }) {
       .select('id, note, status, paid')
       .single();
     setBusy(false);
-    if (error) return setProblem(`Not sent: ${error.message}`);
+    if (error)
+      return setProblem(
+        error.code === '42501' ? 'Novice drivers ride with an assigned instructor, so coaching requests aren’t needed.' : `Not sent: ${error.message}`,
+      );
     setRequest(data as Request);
     setAsking(false);
     setNote('');

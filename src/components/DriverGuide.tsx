@@ -104,6 +104,7 @@ export function DriverGuide({ onDone }: { onDone: () => void }) {
           Track It) and that it's subject to availability. Add the session you'd like (requested sessions are not always available) if you
           like and tap Send request, then see the organizers at registration: they check for an open spot before you pay.
           Once your session is scheduled, the card shows its day, time, session and coach, and you get the usual booking email and alert, or an email saying coaching is full.
+          Novice drivers already ride with an assigned instructor all weekend, so the card tells them that instead of offering Request coaching.
           You can withdraw a request until it's accepted.
         </Body>
       </Section>
