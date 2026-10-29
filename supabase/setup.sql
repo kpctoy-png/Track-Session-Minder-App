@@ -549,7 +549,7 @@ grant execute on function my_run_group(text) to authenticated;
 drop policy if exists "Drivers ask for coaching" on coaching_requests;
 create policy "Drivers ask for coaching" on coaching_requests for insert to authenticated
   with check (email = lower(auth.jwt() ->> 'email') and status = 'open' and not paid
-              and coalesce(my_run_group(event_id), '') not ilike '%novice%');
+              and coalesce(my_run_group(event_id), '') not ilike '%novice%instructor%');
 drop policy if exists "Organizers answer requests" on coaching_requests;
 create policy "Organizers answer requests" on coaching_requests for update to authenticated
   using (can_announce(event_id)) with check (can_announce(event_id));
