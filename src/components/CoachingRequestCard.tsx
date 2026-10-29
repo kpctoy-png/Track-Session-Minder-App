@@ -38,7 +38,7 @@ export function CoachingRequestCard({ email }: { email: string }) {
     setNovice(false);
     supabase
       ?.rpc('my_run_group', { for_event: event.id })
-      .then(({ data }) => setNovice(typeof data === 'string' && /novice/i.test(data)));
+      .then(({ data }) => setNovice(typeof data === 'string' && /novice.*instructor/i.test(data)));
   }, [event.id, email]);
 
   useEffect(() => {
