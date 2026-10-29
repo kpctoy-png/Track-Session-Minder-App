@@ -538,9 +538,18 @@ alter table coaching_requests enable row level security;
 drop policy if exists "Drivers and organizers read requests" on coaching_requests;
 create policy "Drivers and organizers read requests" on coaching_requests for select to authenticated
   using (email = lower(auth.jwt() ->> 'email') or can_announce(event_id));
+-- Novice drivers ride with an assigned instructor, so they can't request paid coaching.
+-- The signed-in driver's run group for an event, from the registered drivers list (null if not on it).
+create or replace function my_run_group(for_event text) returns text
+  language sql stable security definer set search_path = public as $$
+  select run_group from event_roster
+  where event_id = for_event and lower(email) = lower(auth.jwt() ->> 'email') limit 1;
+$$;
+grant execute on function my_run_group(text) to authenticated;
 drop policy if exists "Drivers ask for coaching" on coaching_requests;
 create policy "Drivers ask for coaching" on coaching_requests for insert to authenticated
-  with check (email = lower(auth.jwt() ->> 'email') and status = 'open' and not paid);
+  with check (email = lower(auth.jwt() ->> 'email') and status = 'open' and not paid
+              and coalesce(my_run_group(event_id), '') not ilike '%novice%');
 drop policy if exists "Organizers answer requests" on coaching_requests;
 create policy "Organizers answer requests" on coaching_requests for update to authenticated
   using (can_announce(event_id)) with check (can_announce(event_id));
