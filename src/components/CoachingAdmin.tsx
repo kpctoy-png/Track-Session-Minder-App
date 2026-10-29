@@ -57,6 +57,8 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
   // Declining tells the driver it's full, and accepting unlocks booking, so both wait for a second tap.
   const [declining, setDeclining] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  // The event's instructors from the registered drivers list, offered as the instructor's name is typed.
+  const [instructors, setInstructors] = useState<{ name: string; email: string }[]>([]);
   // Registered drivers' cell numbers by email, for the Text buttons.
   const [cells, setCells] = useState<Map<string, string>>(new Map());
   const club = clubs.find((c) => c.id === event.clubId)?.name;
@@ -108,6 +110,28 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
     setRequests((r) => r.map((x) => (x.id === id ? { ...x, paid: true } : x)));
   };
   const price = COACHING_OFFER[event.clubId]?.amount;
+
+  useEffect(() => {
+    setInstructors([]);
+    supabase
+      ?.from('event_roster')
+      .select('name, email, run_group')
+      .eq('event_id', event.id)
+      .ilike('run_group', '%instructor%')
+      .order('name')
+      // "Novice w/Instructor" drivers are students, not instructors.
+      .then(({ data }) => setInstructors((data ?? []).filter((r) => r.name && !/novice/i.test(r.run_group ?? ''))));
+  }, [event.id, rosterVersion]);
+  const typed = coach.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const instructorMatches = typed.length
+    ? instructors
+        .filter((i) => {
+          const words = i.name.toLowerCase().split(/\s+/);
+          return typed.every((t) => words.some((w) => w.startsWith(t)));
+        })
+        .filter((i) => !(i.name.toLowerCase() === coach.trim().toLowerCase() && i.email.toLowerCase() === coachEmail.trim().toLowerCase()))
+        .slice(0, 6)
+    : [];
 
   useEffect(() => {
     setPaid([]);
@@ -230,6 +254,23 @@ export function CoachingAdmin({ rosterVersion }: { rosterVersion: number }) {
               value={coach}
               onChangeText={setCoach}
             />
+            {instructorMatches.length ? (
+              <View style={styles.chips}>
+                {instructorMatches.map((i) => (
+                  <Pressable
+                    key={i.email}
+                    accessibilityLabel={`Use instructor ${i.name}`}
+                    onPress={() => {
+                      setCoach(i.name);
+                      setCoachEmail(i.email);
+                    }}
+                    style={styles.chip}
+                  >
+                    <Text style={styles.chipText}>{i.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
             <TextInput
               id="coach-email"
               style={styles.input}
