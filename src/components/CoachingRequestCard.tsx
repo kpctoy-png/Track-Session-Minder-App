@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { COACHING_OFFER, coachingTimes } from '@/lib/coaching';
 import { shortDate, todayISO } from '@/lib/dates';
+import { useOnRoster } from '@/lib/registration';
 import { formatRange } from '@/lib/schedule';
 import { useSchedule } from '@/lib/ScheduleStore';
 import { supabase } from '@/lib/supabase';
@@ -33,6 +34,8 @@ export function CoachingRequestCard({ email }: { email: string }) {
   const [problem, setProblem] = useState<string | null>(null);
   // Novice drivers ride with an assigned instructor, so paid coaching isn't offered to them.
   const [novice, setNovice] = useState(false);
+  // Track staff and guests aren't registered, so they can't request coaching (My Day says why at the top).
+  const onRoster = useOnRoster(event.id, email);
 
   useEffect(() => {
     setNovice(false);
@@ -56,6 +59,7 @@ export function CoachingRequestCard({ email }: { email: string }) {
 
   const last = event.days.map((d) => d.date).sort().pop();
   if (!supabase || !last || last < todayISO(new Date())) return null;
+  if (!onRoster && !request && !myBookings) return null;
   if (novice && !request && !myBookings)
     return (
       <View style={styles.card}>
