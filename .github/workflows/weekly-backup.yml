@@ -1,0 +1,56 @@
+# Weekly backup of the app's database (everything in the public schema:
+# events, schedules, drivers, coaching, organizers).
+#
+# The repo is public, so the backup is encrypted before it is uploaded.
+# It is kept for 90 days under Actions -> Weekly database backup -> Artifacts.
+#
+# Needs two repository secrets:
+#   SUPABASE_DB_URL    - Session pooler connection string from Supabase "Connect"
+#   BACKUP_PASSPHRASE  - any long passphrase; needed to open a backup later
+#
+# Restore: download the artifact, unzip, then
+#   gpg -d backup-YYYY-MM-DD.sql.gpg > backup.sql
+# and run backup.sql with psql (or paste parts into the Supabase SQL editor).
+name: Weekly database backup
+on:
+  schedule:
+    - cron: '23 9 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          [ -n "$SUPABASE_DB_URL" ] || { echo "::error::Add the SUPABASE_DB_URL secret first."; exit 1; }
+          [ -n "$BACKUP_PASSPHRASE" ] || { echo "::error::Add the BACKUP_PASSPHRASE secret first."; exit 1; }
+      - name: Install pg_dump 17
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -qq postgresql-client-17 > /dev/null
+      - name: Dump and encrypt
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -o pipefail
+          name="backup-$(date -u +%F).sql"
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" \
+            --schema=public --no-owner --no-privileges > "$name"
+          # Only counts go in the log, never data.
+          echo "Tables: $(grep -c '^CREATE TABLE' "$name")  Size: $(du -h "$name" | cut -f1)"
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --passphrase "$BACKUP_PASSPHRASE" -o "$name.gpg" "$name"
+          rm "$name"
+          echo "NAME=$name.gpg" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: ${{ env.NAME }}
+          retention-days: 90
+          if-no-files-found: error
