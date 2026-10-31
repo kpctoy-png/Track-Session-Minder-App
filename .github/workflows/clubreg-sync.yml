@@ -1,5 +1,5 @@
-# Pulls each event's participant list from ClubReg at 5:30 AM Eastern (give or take GitHub's start
-# delay) two days before, the day before and each morning of the event, and updates Admin → Registered
+# Pulls each event's participant list from ClubReg at about 5:30 AM Eastern (GitHub can start it hours late; any
+# run before noon counts) two days before, the day before and each morning of the event, and updates Admin → Registered
 # drivers: new sign-ups added, cancellations removed. See scripts/clubreg-sync.ts.
 #
 # Needs these repository secrets: CLUBREG_EMAIL and CLUBREG_PASSWORD (the organizer's ClubReg login)

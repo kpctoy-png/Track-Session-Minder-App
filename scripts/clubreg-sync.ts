@@ -4,7 +4,7 @@
 // sends it to the app, which replaces the list and logs who was added and who cancelled. If a pull fails
 // the app keeps the list it has. Names and emails are never printed to the log.
 //
-// Usage: npx tsx scripts/clubreg-sync.ts --check   (prints due=N for the workflow; skips outside 5 AM Eastern)
+// Usage: npx tsx scripts/clubreg-sync.ts --check   (prints due=N for the workflow; skips outside 5 AM to noon Eastern)
 //        npx tsx scripts/clubreg-sync.ts           (pulls; ALL=true pulls every linked event that hasn't ended)
 import { appendFileSync, readFileSync } from 'node:fs';
 
@@ -36,10 +36,13 @@ async function call(body: Record<string, unknown>) {
   return json;
 }
 
-/** The scheduled runs fire at both 5:15 EDT and 5:15 EST times; only the one in the 5 AM hour pulls. */
+/**
+ * The scheduled runs fire at both 5:15 EDT and 5:15 EST times. GitHub can start them hours late on busy
+ * mornings, so any run from 5 AM to noon Eastern pulls (a second pull the same morning changes nothing).
+ */
 function inPullHour(): boolean {
-  const hour = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }).format(new Date());
-  return Number(hour) === 5;
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+  return hour >= 5 && hour < 12;
 }
 
 async function due(): Promise<Due[]> {
